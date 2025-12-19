@@ -3,13 +3,31 @@ import { useTradingState } from '@/hooks/useTradingState';
 import { Watchlist } from './Watchlist';
 import { ChatPanel } from './ChatPanel';
 import { PortfolioPanel } from './PortfolioPanel';
-import { Activity, Zap, TrendingUp, TrendingDown, Wallet, PieChart, MessageCircle, BarChart3, Home } from 'lucide-react';
+import { 
+  LayoutDashboard, 
+  TrendingUp, 
+  TrendingDown, 
+  Wallet, 
+  PieChart, 
+  MessageCircle, 
+  BarChart3,
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownRight,
+  Search,
+  Bell,
+  Settings,
+  Menu,
+  X
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 type TabType = 'dashboard' | 'watchlist' | 'portfolio' | 'chat';
 
 export const TradingDashboard = () => {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   const {
     watchlist,
@@ -28,157 +46,322 @@ export const TradingDashboard = () => {
   const totalReturn = portfolio.totalPL;
   const totalReturnPercent = portfolio.totalPLPercent;
 
-  const tabs = [
-    { id: 'dashboard' as TabType, label: 'Overview', icon: Home },
+  const sidebarItems = [
+    { id: 'dashboard' as TabType, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'watchlist' as TabType, label: 'Watchlist', icon: BarChart3 },
     { id: 'portfolio' as TabType, label: 'Portfolio', icon: PieChart },
     { id: 'chat' as TabType, label: 'AI Coach', icon: MessageCircle },
   ];
 
+  const handleNavClick = (id: TabType) => {
+    setActiveTab(id);
+    setSidebarOpen(false);
+  };
+
   return (
-    <div className="h-screen flex flex-col bg-background bg-gradient-radial overflow-hidden">
-      {/* Header */}
-      <header className="border-b border-border/50 bg-card/30 backdrop-blur-xl flex-shrink-0 z-50">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-3 sm:py-4">
+    <div className="h-screen flex bg-background overflow-hidden">
+      {/* Sidebar Overlay for Mobile */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside className={cn(
+        "fixed md:relative z-50 h-full w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+      )}>
+        {/* Logo */}
+        <div className="p-5 border-b border-sidebar-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-primary/20 glow-primary">
-                <Zap className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+              <div className="w-10 h-10 rounded-xl gradient-purple flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-white" />
               </div>
-              <div>
-                <h1 className="font-bold text-xl sm:text-2xl text-gradient-primary tracking-tight">TradePilot</h1>
-                <p className="text-xs text-muted-foreground hidden sm:block">AI Trading Assistant</p>
-              </div>
+              <span className="font-bold text-xl text-foreground">TradePilot</span>
             </div>
-            
-            <div className="flex items-center gap-3 sm:gap-6">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/10 border border-success/30">
-                <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
-                <span className="text-xs sm:text-sm font-medium text-success">Live</span>
+            <button 
+              className="md:hidden p-2 hover:bg-secondary rounded-lg"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="w-full bg-secondary/60 border border-border/40 rounded-xl pl-10 pr-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+            />
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 px-3 space-y-1">
+          <p className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">Main Menu</p>
+          {sidebarItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleNavClick(item.id)}
+              className={cn("sidebar-nav-item w-full", activeTab === item.id && "active")}
+            >
+              <item.icon className="h-5 w-5" />
+              <span className="font-medium">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Upgrade Card */}
+        <div className="p-4">
+          <div className="balance-card">
+            <div className="relative z-10">
+              <p className="text-sm text-white/70 mb-1">Account Value</p>
+              <p className="font-mono text-2xl font-bold text-white mb-3">
+                ${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </p>
+              <div className={cn(
+                "inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold",
+                dailyPL >= 0 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
+              )}>
+                {dailyPL >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                {dailyPL >= 0 ? '+' : ''}{dailyPLPercent.toFixed(2)}% today
               </div>
             </div>
           </div>
-
-          {/* Desktop Tab Navigation */}
-          <nav className="hidden md:flex items-center gap-1 mt-4 -mb-[1px]">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-sm font-medium transition-all",
-                  activeTab === tab.id
-                    ? "bg-card/80 text-foreground border-t border-x border-border/50"
-                    : "text-muted-foreground hover:text-foreground hover:bg-card/40"
-                )}
-              >
-                <tab.icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            ))}
-          </nav>
         </div>
-      </header>
+      </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-hidden">
-        <div className="h-full max-w-[1800px] mx-auto">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Header */}
+        <header className="flex-shrink-0 h-16 border-b border-border/50 bg-card/30 backdrop-blur-xl flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-4">
+            <button 
+              className="md:hidden p-2 hover:bg-secondary rounded-lg"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground capitalize">{activeTab === 'chat' ? 'AI Trading Coach' : activeTab}</h1>
+              <p className="text-xs text-muted-foreground hidden sm:block">
+                {activeTab === 'dashboard' && 'Overview of your trading activity'}
+                {activeTab === 'watchlist' && 'Real-time market quotes'}
+                {activeTab === 'portfolio' && 'Your positions and holdings'}
+                {activeTab === 'chat' && 'Get AI-powered trading insights'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/10 border border-success/30">
+              <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+              <span className="text-xs font-medium text-success">Live</span>
+            </div>
+            <button className="p-2 hover:bg-secondary rounded-xl transition-colors">
+              <Bell className="h-5 w-5 text-muted-foreground" />
+            </button>
+            <button className="p-2 hover:bg-secondary rounded-xl transition-colors">
+              <Settings className="h-5 w-5 text-muted-foreground" />
+            </button>
+            <div className="w-9 h-9 rounded-xl gradient-purple flex items-center justify-center">
+              <span className="text-sm font-semibold text-white">TP</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <main className="flex-1 overflow-hidden">
           {/* Dashboard View */}
           {activeTab === 'dashboard' && (
-            <div className="h-full overflow-y-auto p-4 sm:p-6 space-y-6">
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-                {/* Portfolio Value */}
-                <div className="stat-card">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="p-2 rounded-xl bg-primary/20">
-                      <Wallet className="h-5 w-5 text-primary" />
+            <div className="h-full overflow-y-auto p-4 md:p-6 space-y-6">
+              {/* Balance Card */}
+              <div className="balance-card">
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wallet className="h-5 w-5 text-white/70" />
+                      <span className="text-sm text-white/70">My Balance</span>
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Portfolio</span>
-                  </div>
-                  <p className="font-mono text-2xl sm:text-4xl font-bold text-foreground mb-2">
-                    ${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className={cn(
-                      "px-2 py-1 rounded-lg text-xs font-semibold",
+                    <p className="font-mono text-3xl md:text-4xl font-bold text-white mb-2">
+                      ${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                    <div className={cn(
+                      "inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold",
                       dailyPL >= 0 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
                     )}>
+                      {dailyPL >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                       {dailyPL >= 0 ? '+' : ''}{dailyPLPercent.toFixed(2)}% today
-                    </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button className="btn-primary">
+                      <ArrowUpRight className="h-4 w-4 mr-2" />
+                      Transfer
+                    </Button>
+                    <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                      Request
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Cash */}
+                <div className="stat-card">
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-xl bg-primary/20">
+                        <CreditCard className="h-5 w-5 text-primary" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Cash Available</p>
+                    <p className="font-mono text-2xl font-bold text-foreground">
+                      ${portfolio.cash.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Buying Power */}
+                <div className="stat-card">
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-xl bg-success/20">
+                        <TrendingUp className="h-5 w-5 text-success" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Buying Power</p>
+                    <p className="font-mono text-2xl font-bold text-foreground">
+                      ${portfolio.buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
                 </div>
 
                 {/* Daily P/L */}
                 <div className={cn("stat-card", dailyPL >= 0 ? "gradient-gain" : "gradient-loss")}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className={cn("p-2 rounded-xl", dailyPL >= 0 ? "bg-success/20" : "bg-destructive/20")}>
-                      {dailyPL >= 0 ? <TrendingUp className="h-5 w-5 text-success" /> : <TrendingDown className="h-5 w-5 text-destructive" />}
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className={cn("p-2 rounded-xl", dailyPL >= 0 ? "bg-success/20" : "bg-destructive/20")}>
+                        {dailyPL >= 0 ? <TrendingUp className="h-5 w-5 text-success" /> : <TrendingDown className="h-5 w-5 text-destructive" />}
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Daily P/L</span>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Daily P/L</p>
+                    <p className={cn("font-mono text-2xl font-bold", dailyPL >= 0 ? "text-success" : "text-destructive")}>
+                      {dailyPL >= 0 ? '+' : ''}${Math.abs(dailyPL).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
                   </div>
-                  <p className={cn("font-mono text-2xl sm:text-4xl font-bold mb-2", dailyPL >= 0 ? "text-success" : "text-destructive")}>
-                    {dailyPL >= 0 ? '+' : ''}${Math.abs(dailyPL).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{positions.length} position{positions.length !== 1 ? 's' : ''}</p>
                 </div>
 
                 {/* Total Return */}
                 <div className="insight-card">
-                  <div className="flex items-center justify-between mb-3 relative z-10">
-                    <div className="p-2 rounded-xl gradient-purple-gold">
-                      <PieChart className="h-5 w-5 text-white" />
+                  <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="p-2 rounded-xl gradient-purple">
+                        <PieChart className="h-5 w-5 text-white" />
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Return</span>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Return</p>
+                    <p className={cn("font-mono text-2xl font-bold", totalReturn >= 0 ? "text-gradient-purple" : "text-destructive")}>
+                      {totalReturn >= 0 ? '+' : ''}{totalReturnPercent.toFixed(2)}%
+                    </p>
                   </div>
-                  <p className={cn("font-mono text-2xl sm:text-4xl font-bold mb-2 relative z-10", totalReturn >= 0 ? "text-gradient-purple-gold" : "text-destructive")}>
-                    {totalReturn >= 0 ? '+' : ''}{totalReturnPercent.toFixed(2)}%
-                  </p>
-                  <p className="text-sm text-muted-foreground relative z-10">Since inception</p>
+                </div>
+              </div>
+
+              {/* Recent Activity */}
+              <div className="glass-card rounded-2xl overflow-hidden">
+                <div className="p-5 border-b border-border/40">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-primary/20">
+                        <BarChart3 className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-foreground">Open Positions</h3>
+                        <p className="text-xs text-muted-foreground">{positions.length} active</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setActiveTab('portfolio')}
+                      className="text-xs text-primary hover:underline font-medium"
+                    >
+                      View All
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="divide-y divide-border/30">
+                  {positions.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <div className="w-12 h-12 rounded-2xl bg-secondary/60 flex items-center justify-center mx-auto mb-3">
+                        <PieChart className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <p className="text-muted-foreground">No open positions</p>
+                      <p className="text-xs text-muted-foreground mt-1">Start trading to see your positions here</p>
+                    </div>
+                  ) : (
+                    positions.slice(0, 5).map((pos, index) => (
+                      <div 
+                        key={pos.symbol} 
+                        className="flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={cn(
+                            "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold",
+                            pos.unrealizedPL >= 0 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
+                          )}>
+                            {pos.symbol.slice(0, 2)}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-foreground">{pos.symbol}</p>
+                            <p className="text-xs text-muted-foreground">{pos.qty} shares @ ${pos.avgPrice.toFixed(2)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-mono font-semibold text-foreground">${pos.marketValue.toLocaleString()}</p>
+                          <p className={cn(
+                            "text-xs font-medium flex items-center justify-end gap-1",
+                            pos.unrealizedPL >= 0 ? "text-success" : "text-destructive"
+                          )}>
+                            {pos.unrealizedPL >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                            {pos.unrealizedPL >= 0 ? '+' : ''}${pos.unrealizedPL.toFixed(2)} ({pos.unrealizedPLPercent.toFixed(2)}%)
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
               {/* Quick Actions */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {tabs.slice(1).map((tab) => (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {sidebarItems.slice(1).map((item) => (
                   <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className="glass-card p-4 rounded-xl flex flex-col items-center gap-2 hover:bg-card/60 transition-all group"
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className="glass-card p-5 rounded-xl flex items-center gap-4 hover:bg-card transition-all group border border-transparent hover:border-primary/20"
                   >
                     <div className="p-3 rounded-xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                      <tab.icon className="h-6 w-6 text-primary" />
+                      <item.icon className="h-6 w-6 text-primary" />
                     </div>
-                    <span className="text-sm font-medium text-foreground">{tab.label}</span>
+                    <div className="text-left">
+                      <span className="font-semibold text-foreground block">{item.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {item.id === 'watchlist' && `${watchlist.length} stocks`}
+                        {item.id === 'portfolio' && `${positions.length} positions`}
+                        {item.id === 'chat' && 'AI insights'}
+                      </span>
+                    </div>
                   </button>
                 ))}
-              </div>
-
-              {/* Recent Activity Preview */}
-              <div className="glass-card rounded-xl p-4">
-                <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" />
-                  Recent Activity
-                </h3>
-                <div className="space-y-3">
-                  {positions.slice(0, 3).map((pos) => (
-                    <div key={pos.symbol} className="flex items-center justify-between p-3 rounded-lg bg-card/50">
-                      <div className="flex items-center gap-3">
-                        <div className={cn("w-1 h-10 rounded-full", pos.unrealizedPL >= 0 ? "bg-success" : "bg-destructive")} />
-                        <div>
-                          <p className="font-bold text-foreground">{pos.symbol}</p>
-                          <p className="text-xs text-muted-foreground">{pos.qty} shares</p>
-                        </div>
-                      </div>
-                      <p className={cn("font-mono font-semibold", pos.unrealizedPL >= 0 ? "text-success" : "text-destructive")}>
-                        {pos.unrealizedPL >= 0 ? '+' : ''}${pos.unrealizedPL.toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
-                  {positions.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">No open positions</p>
-                  )}
-                </div>
               </div>
             </div>
           )}
@@ -211,29 +394,8 @@ export const TradingDashboard = () => {
               />
             </div>
           )}
-        </div>
-      </main>
-
-      {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden flex-shrink-0 border-t border-border/50 bg-card/80 backdrop-blur-xl safe-area-inset-bottom">
-        <div className="flex justify-around py-2">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all",
-                activeTab === tab.id
-                  ? "text-primary"
-                  : "text-muted-foreground"
-              )}
-            >
-              <tab.icon className={cn("h-5 w-5", activeTab === tab.id && "text-primary")} />
-              <span className="text-xs font-medium">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
+        </main>
+      </div>
     </div>
   );
 };
