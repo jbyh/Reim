@@ -3,6 +3,10 @@ import { useTradingState } from '@/hooks/useTradingState';
 import { Watchlist } from './Watchlist';
 import { ChatPanel } from './ChatPanel';
 import { PortfolioPanel } from './PortfolioPanel';
+import { AccountHistory } from './AccountHistory';
+import { PositionDetail } from './PositionDetail';
+import { PerformanceAttribution } from './PerformanceAttribution';
+import { Position } from '@/types/trading';
 import { 
   LayoutDashboard, 
   TrendingUp, 
@@ -18,16 +22,18 @@ import {
   Bell,
   Settings,
   Menu,
-  X
+  X,
+  Clock
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type TabType = 'dashboard' | 'watchlist' | 'portfolio' | 'chat';
+type TabType = 'dashboard' | 'watchlist' | 'portfolio' | 'chat' | 'history';
 
 export const TradingDashboard = () => {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   
   const {
     watchlist,
@@ -36,9 +42,12 @@ export const TradingDashboard = () => {
     messages,
     pendingOrder,
     isLoading,
+    activities,
+    isLoadingActivities,
     sendMessage,
     confirmOrder,
     cancelOrder,
+    fetchActivities,
   } = useTradingState();
 
   const dailyPL = portfolio.dayPL;
@@ -50,12 +59,18 @@ export const TradingDashboard = () => {
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'watchlist' as TabType, label: 'Watchlist', icon: BarChart3 },
     { id: 'portfolio' as TabType, label: 'Portfolio', icon: PieChart },
+    { id: 'history' as TabType, label: 'History', icon: Clock },
     { id: 'chat' as TabType, label: 'AI Coach', icon: MessageCircle },
   ];
 
   const handleNavClick = (id: TabType) => {
     setActiveTab(id);
     setSidebarOpen(false);
+    setSelectedPosition(null);
+  };
+
+  const handlePositionClick = (position: Position) => {
+    setSelectedPosition(position);
   };
 
   return (
@@ -308,10 +323,11 @@ export const TradingDashboard = () => {
                       <p className="text-xs text-muted-foreground mt-1">Start trading to see your positions here</p>
                     </div>
                   ) : (
-                    positions.slice(0, 5).map((pos, index) => (
-                      <div 
+                    positions.slice(0, 5).map((pos) => (
+                      <button 
                         key={pos.symbol} 
-                        className="flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors"
+                        onClick={() => { setActiveTab('portfolio'); handlePositionClick(pos); }}
+                        className="flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors w-full text-left"
                       >
                         <div className="flex items-center gap-4">
                           <div className={cn(
@@ -335,14 +351,17 @@ export const TradingDashboard = () => {
                             {pos.unrealizedPL >= 0 ? '+' : ''}${pos.unrealizedPL.toFixed(2)} ({pos.unrealizedPLPercent.toFixed(2)}%)
                           </p>
                         </div>
-                      </div>
+                      </button>
                     ))
                   )}
                 </div>
               </div>
 
+              {/* Performance Attribution */}
+              <PerformanceAttribution positions={positions} totalEquity={portfolio.equity} />
+
               {/* Quick Actions */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 {sidebarItems.slice(1).map((item) => (
                   <button
                     key={item.id}
@@ -357,6 +376,7 @@ export const TradingDashboard = () => {
                       <span className="text-xs text-muted-foreground">
                         {item.id === 'watchlist' && `${watchlist.length} stocks`}
                         {item.id === 'portfolio' && `${positions.length} positions`}
+                        {item.id === 'history' && `${activities.length} activities`}
                         {item.id === 'chat' && 'AI insights'}
                       </span>
                     </div>
@@ -376,7 +396,30 @@ export const TradingDashboard = () => {
           {/* Portfolio View */}
           {activeTab === 'portfolio' && (
             <div className="h-full">
-              <PortfolioPanel portfolio={portfolio} positions={positions} />
+              {selectedPosition ? (
+                <PositionDetail 
+                  position={selectedPosition} 
+                  activities={activities}
+                  onBack={() => setSelectedPosition(null)} 
+                />
+              ) : (
+                <PortfolioPanel 
+                  portfolio={portfolio} 
+                  positions={positions} 
+                  onPositionClick={handlePositionClick}
+                />
+              )}
+            </div>
+          )}
+
+          {/* History View */}
+          {activeTab === 'history' && (
+            <div className="h-full">
+              <AccountHistory 
+                activities={activities} 
+                isLoading={isLoadingActivities} 
+                onRefresh={fetchActivities} 
+              />
             </div>
           )}
 

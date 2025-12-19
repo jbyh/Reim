@@ -18,6 +18,8 @@ export interface Position {
   marketValue: number;
   unrealizedPL: number;
   unrealizedPLPercent: number;
+  costBasis?: number;
+  side?: string;
 }
 
 export interface Order {
@@ -59,4 +61,34 @@ export interface Portfolio {
   dayPLPercent: number;
   totalPL: number;
   totalPLPercent: number;
+}
+
+export interface Activity {
+  id: string;
+  activity_type: string;
+  transaction_time: string;
+  symbol?: string;
+  side?: string;
+  qty?: string;
+  price?: string;
+  net_amount?: string;
+  description?: string;
+  status?: string;
+}
+
+export interface BarData {
+  t: string;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
+export interface PerformanceAttribution {
+  symbol: string;
+  allocation: number;
+  return: number;
+  contribution: number;
+  marketValue: number;
 }
