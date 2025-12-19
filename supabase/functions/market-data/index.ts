@@ -5,7 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ALPACA_BASE_URL = 'https://data.alpaca.markets/v2';
+const ALPACA_DATA_URL = 'https://data.alpaca.markets/v2';
+const ALPACA_TRADING_URL = 'https://paper-api.alpaca.markets/v2';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -20,23 +21,88 @@ serve(async (req) => {
       throw new Error('Alpaca API credentials not configured');
     }
 
-    const { symbols } = await req.json();
-    
+    const alpacaHeaders = {
+      'APCA-API-KEY-ID': ALPACA_API_KEY,
+      'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
+    };
+
+    const body = await req.json();
+    const { action, symbols, symbol, timeframe, start, end } = body;
+
+    // Route to different handlers based on action
+    if (action === 'account') {
+      const response = await fetch(`${ALPACA_TRADING_URL}/account`, {
+        headers: alpacaHeaders,
+      });
+      if (!response.ok) {
+        throw new Error(`Alpaca API error: ${response.status}`);
+      }
+      const data = await response.json();
+      return new Response(JSON.stringify({ data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'positions') {
+      const response = await fetch(`${ALPACA_TRADING_URL}/positions`, {
+        headers: alpacaHeaders,
+      });
+      if (!response.ok) {
+        throw new Error(`Alpaca API error: ${response.status}`);
+      }
+      const data = await response.json();
+      return new Response(JSON.stringify({ data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'activities') {
+      const url = new URL(`${ALPACA_TRADING_URL}/account/activities`);
+      url.searchParams.set('direction', 'desc');
+      url.searchParams.set('page_size', '100');
+      
+      const response = await fetch(url.toString(), {
+        headers: alpacaHeaders,
+      });
+      if (!response.ok) {
+        throw new Error(`Alpaca API error: ${response.status}`);
+      }
+      const data = await response.json();
+      return new Response(JSON.stringify({ data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'bars' && symbol) {
+      const url = new URL(`${ALPACA_DATA_URL}/stocks/${symbol}/bars`);
+      url.searchParams.set('timeframe', timeframe || '1Day');
+      url.searchParams.set('limit', '365');
+      if (start) url.searchParams.set('start', start);
+      if (end) url.searchParams.set('end', end);
+
+      const response = await fetch(url.toString(), {
+        headers: alpacaHeaders,
+      });
+      if (!response.ok) {
+        throw new Error(`Alpaca API error: ${response.status}`);
+      }
+      const data = await response.json();
+      return new Response(JSON.stringify({ data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Default: fetch quotes for symbols
     if (!symbols || !Array.isArray(symbols) || symbols.length === 0) {
-      throw new Error('Symbols array is required');
+      throw new Error('Symbols array is required for quotes');
     }
 
     const symbolsParam = symbols.join(',');
     
     // Fetch latest quotes (includes bid/ask)
     const quotesResponse = await fetch(
-      `${ALPACA_BASE_URL}/stocks/quotes/latest?symbols=${symbolsParam}`,
-      {
-        headers: {
-          'APCA-API-KEY-ID': ALPACA_API_KEY,
-          'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
-        },
-      }
+      `${ALPACA_DATA_URL}/stocks/quotes/latest?symbols=${symbolsParam}`,
+      { headers: alpacaHeaders }
     );
 
     if (!quotesResponse.ok) {
@@ -49,13 +115,8 @@ serve(async (req) => {
 
     // Fetch latest trades (includes last trade price)
     const tradesResponse = await fetch(
-      `${ALPACA_BASE_URL}/stocks/trades/latest?symbols=${symbolsParam}`,
-      {
-        headers: {
-          'APCA-API-KEY-ID': ALPACA_API_KEY,
-          'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
-        },
-      }
+      `${ALPACA_DATA_URL}/stocks/trades/latest?symbols=${symbolsParam}`,
+      { headers: alpacaHeaders }
     );
 
     if (!tradesResponse.ok) {
@@ -68,13 +129,8 @@ serve(async (req) => {
 
     // Fetch previous day bars for change calculation
     const barsResponse = await fetch(
-      `${ALPACA_BASE_URL}/stocks/bars?symbols=${symbolsParam}&timeframe=1Day&limit=2`,
-      {
-        headers: {
-          'APCA-API-KEY-ID': ALPACA_API_KEY,
-          'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
-        },
-      }
+      `${ALPACA_DATA_URL}/stocks/bars?symbols=${symbolsParam}&timeframe=1Day&limit=2`,
+      { headers: alpacaHeaders }
     );
 
     let barsData: { bars: Record<string, Array<{ c: number }>> } = { bars: {} };
@@ -85,18 +141,18 @@ serve(async (req) => {
     // Combine data for each symbol
     const marketData: Record<string, any> = {};
     
-    for (const symbol of symbols) {
-      const quote = quotesData.quotes?.[symbol];
-      const trade = tradesData.trades?.[symbol];
-      const bars = barsData.bars?.[symbol] || [];
+    for (const sym of symbols) {
+      const quote = quotesData.quotes?.[sym];
+      const trade = tradesData.trades?.[sym];
+      const bars = barsData.bars?.[sym] || [];
       
       const lastPrice = trade?.p || quote?.ap || 0;
       const prevClose = bars.length >= 2 ? bars[bars.length - 2]?.c : bars[0]?.c || lastPrice;
       const change = lastPrice - prevClose;
       const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
-      marketData[symbol] = {
-        symbol,
+      marketData[sym] = {
+        symbol: sym,
         lastPrice: lastPrice,
         bidPrice: quote?.bp || 0,
         askPrice: quote?.ap || 0,

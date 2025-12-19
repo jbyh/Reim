@@ -14,9 +14,10 @@ import { cn } from '@/lib/utils';
 interface PortfolioPanelProps {
   portfolio: Portfolio;
   positions: Position[];
+  onPositionClick?: (position: Position) => void;
 }
 
-export const PortfolioPanel = ({ portfolio, positions }: PortfolioPanelProps) => {
+export const PortfolioPanel = ({ portfolio, positions, onPositionClick }: PortfolioPanelProps) => {
   const totalPositionValue = positions.reduce((sum, p) => sum + p.marketValue, 0);
   const allocationPercent = portfolio.equity > 0 ? (totalPositionValue / portfolio.equity) * 100 : 0;
 
@@ -136,9 +137,10 @@ export const PortfolioPanel = ({ portfolio, positions }: PortfolioPanelProps) =>
               </div>
             ) : (
               positions.map((position) => (
-                <div
+                <button
                   key={position.symbol}
-                  className="p-4 hover:bg-secondary/30 transition-colors"
+                  onClick={() => onPositionClick?.(position)}
+                  className="p-4 hover:bg-secondary/30 transition-colors w-full text-left"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -193,7 +195,7 @@ export const PortfolioPanel = ({ portfolio, positions }: PortfolioPanelProps) =>
                       {totalPositionValue > 0 ? ((position.marketValue / totalPositionValue) * 100).toFixed(1) : 0}%
                     </span>
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>

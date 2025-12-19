@@ -1,40 +1,50 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Stock, Position, Order, ChatMessage, Portfolio, OrderIntent } from '@/types/trading';
+import { Stock, Position, Order, ChatMessage, Portfolio, OrderIntent, Activity } from '@/types/trading';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 const WATCHLIST_SYMBOLS = ['SPY', 'QQQ', 'TSLA', 'NVDA', 'AAPL'];
 
-const INITIAL_WATCHLIST: Stock[] = [
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF', price: 0, change: 0, changePercent: 0 },
-  { symbol: 'QQQ', name: 'Invesco QQQ Trust', price: 0, change: 0, changePercent: 0 },
-  { symbol: 'TSLA', name: 'Tesla Inc', price: 0, change: 0, changePercent: 0 },
-  { symbol: 'NVDA', name: 'NVIDIA Corp', price: 0, change: 0, changePercent: 0 },
-  { symbol: 'AAPL', name: 'Apple Inc', price: 0, change: 0, changePercent: 0 },
-];
+const STOCK_NAMES: Record<string, string> = {
+  'SPY': 'SPDR S&P 500 ETF',
+  'QQQ': 'Invesco QQQ Trust',
+  'TSLA': 'Tesla Inc',
+  'NVDA': 'NVIDIA Corp',
+  'AAPL': 'Apple Inc',
+  'MSFT': 'Microsoft Corp',
+  'AMZN': 'Amazon.com Inc',
+  'GOOGL': 'Alphabet Inc',
+  'META': 'Meta Platforms Inc',
+  'AMD': 'AMD Inc',
+};
 
-const INITIAL_POSITIONS: Position[] = [
-  { symbol: 'NVDA', qty: 50, avgPrice: 820.00, currentPrice: 875.32, marketValue: 43766, unrealizedPL: 2766, unrealizedPLPercent: 6.75 },
-  { symbol: 'AAPL', qty: 100, avgPrice: 165.00, currentPrice: 178.25, marketValue: 17825, unrealizedPL: 1325, unrealizedPLPercent: 8.03 },
-];
+const INITIAL_WATCHLIST: Stock[] = WATCHLIST_SYMBOLS.map(symbol => ({
+  symbol,
+  name: STOCK_NAMES[symbol] || symbol,
+  price: 0,
+  change: 0,
+  changePercent: 0,
+}));
 
 const INITIAL_PORTFOLIO: Portfolio = {
-  equity: 100000,
-  cash: 38409,
-  buyingPower: 76818,
-  dayPL: 1245.50,
-  dayPLPercent: 1.26,
-  totalPL: 8500,
-  totalPLPercent: 9.30,
+  equity: 0,
+  cash: 0,
+  buyingPower: 0,
+  dayPL: 0,
+  dayPLPercent: 0,
+  totalPL: 0,
+  totalPLPercent: 0,
 };
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 
 export const useTradingState = () => {
   const [watchlist, setWatchlist] = useState<Stock[]>(INITIAL_WATCHLIST);
-  const [positions, setPositions] = useState<Position[]>(INITIAL_POSITIONS);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [portfolio, setPortfolio] = useState<Portfolio>(INITIAL_PORTFOLIO);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: generateId(),
@@ -46,6 +56,89 @@ export const useTradingState = () => {
   const [pendingOrder, setPendingOrder] = useState<OrderIntent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const conversationHistory = useRef<Array<{ role: string; content: string }>>([]);
+
+  // Fetch account data from Alpaca
+  const fetchAccountData = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('market-data', {
+        body: { action: 'account' },
+      });
+
+      if (error || !data?.data) {
+        console.error('Account data error:', error);
+        return;
+      }
+
+      const account = data.data;
+      const equity = parseFloat(account.equity) || 0;
+      const lastEquity = parseFloat(account.last_equity) || equity;
+      const dayPL = equity - lastEquity;
+      const dayPLPercent = lastEquity > 0 ? (dayPL / lastEquity) * 100 : 0;
+
+      setPortfolio({
+        equity,
+        cash: parseFloat(account.cash) || 0,
+        buyingPower: parseFloat(account.buying_power) || 0,
+        dayPL,
+        dayPLPercent,
+        totalPL: equity - 100000, // Assuming $100k initial
+        totalPLPercent: ((equity - 100000) / 100000) * 100,
+      });
+    } catch (err) {
+      console.error('Failed to fetch account:', err);
+    }
+  }, []);
+
+  // Fetch positions from Alpaca
+  const fetchPositions = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('market-data', {
+        body: { action: 'positions' },
+      });
+
+      if (error || !data?.data) {
+        console.error('Positions error:', error);
+        return;
+      }
+
+      const alpacaPositions = data.data.map((p: any) => ({
+        symbol: p.symbol,
+        qty: parseFloat(p.qty) || 0,
+        avgPrice: parseFloat(p.avg_entry_price) || 0,
+        currentPrice: parseFloat(p.current_price) || 0,
+        marketValue: parseFloat(p.market_value) || 0,
+        unrealizedPL: parseFloat(p.unrealized_pl) || 0,
+        unrealizedPLPercent: parseFloat(p.unrealized_plpc) * 100 || 0,
+        costBasis: parseFloat(p.cost_basis) || 0,
+        side: p.side,
+      }));
+
+      setPositions(alpacaPositions);
+    } catch (err) {
+      console.error('Failed to fetch positions:', err);
+    }
+  }, []);
+
+  // Fetch activities from Alpaca
+  const fetchActivities = useCallback(async () => {
+    setIsLoadingActivities(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('market-data', {
+        body: { action: 'activities' },
+      });
+
+      if (error || !data?.data) {
+        console.error('Activities error:', error);
+        return;
+      }
+
+      setActivities(data.data);
+    } catch (err) {
+      console.error('Failed to fetch activities:', err);
+    } finally {
+      setIsLoadingActivities(false);
+    }
+  }, []);
 
   // Fetch live market data from Alpaca
   const fetchMarketData = useCallback(async () => {
@@ -83,12 +176,21 @@ export const useTradingState = () => {
     }
   }, []);
 
-  // Fetch market data on mount and every 10 seconds
+  // Fetch all data on mount
   useEffect(() => {
+    fetchAccountData();
+    fetchPositions();
+    fetchActivities();
     fetchMarketData();
-    const interval = setInterval(fetchMarketData, 10000);
+    
+    const interval = setInterval(() => {
+      fetchMarketData();
+      fetchAccountData();
+      fetchPositions();
+    }, 15000);
+    
     return () => clearInterval(interval);
-  }, [fetchMarketData]);
+  }, [fetchAccountData, fetchPositions, fetchActivities, fetchMarketData]);
 
   // Update positions based on watchlist prices
   useEffect(() => {
@@ -395,8 +497,11 @@ export const useTradingState = () => {
     messages,
     pendingOrder,
     isLoading,
+    activities,
+    isLoadingActivities,
     sendMessage,
     confirmOrder,
     cancelOrder,
+    fetchActivities,
   };
 };
