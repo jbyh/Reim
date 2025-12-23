@@ -6,6 +6,7 @@ import { PortfolioPanel } from './PortfolioPanel';
 import { AccountHistory } from './AccountHistory';
 import { PositionDetail } from './PositionDetail';
 import { PerformanceAttribution } from './PerformanceAttribution';
+import { OptionsView } from './options/OptionsView';
 import { Position } from '@/types/trading';
 import { 
   LayoutDashboard, 
@@ -23,12 +24,13 @@ import {
   Settings,
   Menu,
   X,
-  Clock
+  Clock,
+  Layers
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type TabType = 'dashboard' | 'watchlist' | 'portfolio' | 'chat' | 'history';
+type TabType = 'dashboard' | 'watchlist' | 'portfolio' | 'chat' | 'history' | 'options';
 
 export const TradingDashboard = () => {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -59,6 +61,7 @@ export const TradingDashboard = () => {
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'watchlist' as TabType, label: 'Watchlist', icon: BarChart3 },
     { id: 'portfolio' as TabType, label: 'Portfolio', icon: PieChart },
+    { id: 'options' as TabType, label: 'Options', icon: Layers },
     { id: 'history' as TabType, label: 'History', icon: Clock },
     { id: 'chat' as TabType, label: 'AI Coach', icon: MessageCircle },
   ];
@@ -170,6 +173,7 @@ export const TradingDashboard = () => {
                 {activeTab === 'dashboard' && 'Overview of your trading activity'}
                 {activeTab === 'watchlist' && 'Real-time market quotes'}
                 {activeTab === 'portfolio' && 'Your positions and holdings'}
+                {activeTab === 'options' && 'Draw your price predictions'}
                 {activeTab === 'chat' && 'Get AI-powered trading insights'}
               </p>
             </div>
@@ -409,6 +413,13 @@ export const TradingDashboard = () => {
                   onPositionClick={handlePositionClick}
                 />
               )}
+            </div>
+          )}
+
+          {/* Options View */}
+          {activeTab === 'options' && (
+            <div className="h-full">
+              <OptionsView />
             </div>
           )}
 
