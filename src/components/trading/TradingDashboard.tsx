@@ -6,7 +6,7 @@ import { PortfolioPanel } from './PortfolioPanel';
 import { AccountHistory } from './AccountHistory';
 import { PositionDetail } from './PositionDetail';
 import { PerformanceAttribution } from './PerformanceAttribution';
-import { OptionsView } from './options/OptionsView';
+import { OptionsViewNew } from './options/OptionsViewNew';
 import { Position } from '@/types/trading';
 import { 
   LayoutDashboard, 
@@ -419,7 +419,7 @@ export const TradingDashboard = () => {
           {/* Options View */}
           {activeTab === 'options' && (
             <div className="h-full">
-              <OptionsView />
+              <OptionsViewNew />
             </div>
           )}
 
