@@ -1,9 +1,35 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, TrendingDown, Activity, DollarSign, BarChart3, Zap, Target, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Activity, BarChart3, Zap, Target, Sparkles, Search, LineChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTradingState } from '@/hooks/useTradingState';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { StockSearch } from '@/components/trading/StockSearch';
+
+interface StockData {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  bidPrice?: number;
+  askPrice?: number;
+}
+
+// Stock name mappings
+const STOCK_NAMES: Record<string, string> = {
+  AAPL: 'Apple Inc.',
+  MSFT: 'Microsoft Corporation',
+  GOOGL: 'Alphabet Inc.',
+  AMZN: 'Amazon.com Inc.',
+  NVDA: 'NVIDIA Corporation',
+  TSLA: 'Tesla Inc.',
+  META: 'Meta Platforms Inc.',
+  SPY: 'SPDR S&P 500 ETF',
+  QQQ: 'Invesco QQQ Trust',
+  AMD: 'Advanced Micro Devices',
+};
 
 const generateChartData = (positive: boolean, points: number = 50) => {
   const data: number[] = [];
