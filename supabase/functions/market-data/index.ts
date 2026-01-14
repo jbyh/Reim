@@ -180,10 +180,24 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+
+    // Alpaca uses 401 for invalid/expired keys or wrong environment (paper vs live)
+    const isUnauthorized = msg.includes('Alpaca API error: 401') || msg.includes('401 Authorization Required');
+
     console.error('Market data error:', error);
+
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        error: msg,
+        hint: isUnauthorized
+          ? 'Unauthorized from Alpaca. Double-check you pasted the raw KEY and SECRET (no prefixes/spaces) and that they match your Alpaca paper/live account.'
+          : undefined,
+      }),
+      {
+        status: isUnauthorized ? 401 : 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
   }
 });
