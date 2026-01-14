@@ -17,11 +17,12 @@ import {
   Loader2,
   Eye,
   EyeOff,
-  ExternalLink
+  ExternalLink,
+  Lock
 } from 'lucide-react';
 
 export const Profile = () => {
-  const { user, profile, loading, signOut, updateProfile, hasAlpacaCredentials } = useAuth();
+  const { user, profile, loading, signOut, updateProfile, saveAlpacaCredentials, hasAlpacaCredentials } = useAuth();
   const navigate = useNavigate();
   
   const [displayName, setDisplayName] = useState('');
@@ -41,8 +42,7 @@ export const Profile = () => {
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name || '');
-      setAlpacaApiKey(profile.alpaca_api_key || '');
-      setAlpacaSecretKey(profile.alpaca_secret_key || '');
+      // Don't populate encrypted keys - they can't be decrypted client-side
       setPaperTrading(profile.alpaca_paper_trading ?? true);
     }
   }, [profile]);
@@ -77,18 +77,17 @@ export const Profile = () => {
 
     setIsSaving(true);
     
-    const { error } = await updateProfile({
-      alpaca_api_key: alpacaApiKey.trim(),
-      alpaca_secret_key: alpacaSecretKey.trim(),
-      alpaca_paper_trading: paperTrading,
-    });
+    const result = await saveAlpacaCredentials(alpacaApiKey.trim(), alpacaSecretKey.trim(), paperTrading);
     
     setIsSaving(false);
     
-    if (error) {
+    if (result.error) {
       toast.error('Failed to save Alpaca credentials');
     } else {
-      toast.success('Alpaca credentials saved! Your trades will now sync with your account.');
+      toast.success('Alpaca credentials saved securely! Your trades will now sync with your account.');
+      // Clear the input fields after successful save
+      setAlpacaApiKey('');
+      setAlpacaSecretKey('');
     }
   };
 
@@ -200,6 +199,17 @@ export const Profile = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Security Note */}
+            <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
+              <Lock className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-primary">Encrypted Storage</p>
+                <p className="text-muted-foreground">
+                  Your API keys are encrypted before being stored and can only be decrypted server-side for trading operations.
+                </p>
+              </div>
+            </div>
+
             {/* Instructions */}
             <div className="bg-secondary/50 rounded-xl p-4 space-y-3">
               <h4 className="font-medium text-sm flex items-center gap-2">
@@ -214,6 +224,18 @@ export const Profile = () => {
               </ol>
             </div>
 
+            {hasAlpacaCredentials && (
+              <div className="bg-success/10 border border-success/20 rounded-xl p-4 flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-success">Keys Configured</p>
+                  <p className="text-muted-foreground">
+                    Your Alpaca credentials are securely stored. Enter new keys below to update them.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* API Key */}
             <div className="space-y-2">
               <Label htmlFor="alpacaApiKey">API Key ID</Label>
@@ -221,7 +243,7 @@ export const Profile = () => {
                 <Input
                   id="alpacaApiKey"
                   type={showApiKey ? 'text' : 'password'}
-                  placeholder="PKXXXXXXXXXXXXXXXX"
+                  placeholder={hasAlpacaCredentials ? "Enter new key to update" : "PKXXXXXXXXXXXXXXXX"}
                   value={alpacaApiKey}
                   onChange={(e) => setAlpacaApiKey(e.target.value)}
                   className="pr-10"
@@ -243,7 +265,7 @@ export const Profile = () => {
                 <Input
                   id="alpacaSecretKey"
                   type={showSecretKey ? 'text' : 'password'}
-                  placeholder="••••••••••••••••••••"
+                  placeholder={hasAlpacaCredentials ? "Enter new key to update" : "••••••••••••••••••••"}
                   value={alpacaSecretKey}
                   onChange={(e) => setAlpacaSecretKey(e.target.value)}
                   className="pr-10"
@@ -293,7 +315,7 @@ export const Profile = () => {
               {isSaving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  Encrypting & Saving...
                 </>
               ) : hasAlpacaCredentials ? (
                 'Update Alpaca Credentials'

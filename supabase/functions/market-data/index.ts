@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { decryptApiKey } from "../_shared/crypto.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,16 +34,17 @@ serve(async (req) => {
       if (user) {
         userId = user.id;
         
-        // Fetch user's Alpaca credentials from their profile
+        // Fetch user's encrypted Alpaca credentials from their profile
         const { data: profile } = await supabase
           .from('profiles')
-          .select('alpaca_api_key, alpaca_secret_key, alpaca_paper_trading')
+          .select('alpaca_api_key_encrypted, alpaca_secret_key_encrypted, alpaca_paper_trading')
           .eq('user_id', user.id)
           .single();
         
-        if (profile?.alpaca_api_key && profile?.alpaca_secret_key) {
-          userAlpacaKey = profile.alpaca_api_key;
-          userAlpacaSecret = profile.alpaca_secret_key;
+        if (profile?.alpaca_api_key_encrypted && profile?.alpaca_secret_key_encrypted) {
+          // Decrypt the keys
+          userAlpacaKey = await decryptApiKey(profile.alpaca_api_key_encrypted, user.id);
+          userAlpacaSecret = await decryptApiKey(profile.alpaca_secret_key_encrypted, user.id);
           paperTrading = profile.alpaca_paper_trading ?? true;
         }
       }

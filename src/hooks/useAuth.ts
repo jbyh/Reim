@@ -7,8 +7,8 @@ interface Profile {
   user_id: string;
   email: string | null;
   display_name: string | null;
-  alpaca_api_key: string | null;
-  alpaca_secret_key: string | null;
+  alpaca_api_key_encrypted: string | null;
+  alpaca_secret_key_encrypted: string | null;
   alpaca_paper_trading: boolean;
   created_at: string;
   updated_at: string;
@@ -94,7 +94,7 @@ export const useAuth = () => {
     return { error };
   };
 
-  const updateProfile = async (updates: Partial<Profile>) => {
+  const updateProfile = async (updates: Partial<Pick<Profile, 'display_name' | 'alpaca_paper_trading'>>) => {
     if (!user) return { error: new Error('Not authenticated') };
     
     const { data, error } = await supabase
@@ -111,8 +111,38 @@ export const useAuth = () => {
     return { data, error };
   };
 
+  // Save Alpaca credentials via secure edge function (encrypted server-side)
+  const saveAlpacaCredentials = async (apiKey: string, secretKey: string, paperTrading: boolean) => {
+    if (!session?.access_token) {
+      return { error: new Error('Not authenticated') };
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('save-alpaca-keys', {
+        body: {
+          alpaca_api_key: apiKey,
+          alpaca_secret_key: secretKey,
+          alpaca_paper_trading: paperTrading,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      // Refetch profile to update local state
+      if (user) {
+        await fetchProfile(user.id);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Failed to save Alpaca credentials:', error);
+      return { error };
+    }
+  };
+
   const hasAlpacaCredentials = Boolean(
-    profile?.alpaca_api_key && profile?.alpaca_secret_key
+    profile?.alpaca_api_key_encrypted && profile?.alpaca_secret_key_encrypted
   );
 
   return {
@@ -124,6 +154,7 @@ export const useAuth = () => {
     signIn,
     signOut,
     updateProfile,
+    saveAlpacaCredentials,
     hasAlpacaCredentials,
     refetchProfile: () => user && fetchProfile(user.id),
   };
