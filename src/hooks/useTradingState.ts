@@ -383,96 +383,93 @@ export const useTradingState = () => {
     [isLoading, streamAIResponse]
   );
 
-  // Confirm order
-  const confirmOrder = useCallback(() => {
+  // Refetch all portfolio data
+  const refetchAllData = useCallback(async () => {
+    await Promise.all([
+      fetchAccountData(),
+      fetchPositions(),
+      fetchActivities(),
+    ]);
+  }, [fetchAccountData, fetchPositions, fetchActivities]);
+
+  // Confirm order - submit to Alpaca and refetch data
+  const confirmOrder = useCallback(async () => {
     if (!pendingOrder) return;
 
     const stock = watchlist.find((s) => s.symbol === pendingOrder.symbol);
-    if (!stock) return;
+    const currentPrice = stock?.price || pendingOrder.limitPrice || 0;
 
-    const order: Order = {
-      id: generateId(),
-      ...pendingOrder,
-      status: 'filled',
-      timestamp: new Date(),
-    };
-
-    setOrders((prev) => [...prev, order]);
-
-    // Update positions
-    if (pendingOrder.side === 'buy') {
-      setPositions((prev) => {
-        const existing = prev.find((p) => p.symbol === pendingOrder.symbol);
-        if (existing) {
-          const totalQty = existing.qty + pendingOrder.qty;
-          const totalCost = existing.qty * existing.avgPrice + pendingOrder.qty * stock.price;
-          return prev.map((p) =>
-            p.symbol === pendingOrder.symbol
-              ? {
-                  ...p,
-                  qty: totalQty,
-                  avgPrice: Number((totalCost / totalQty).toFixed(2)),
-                  marketValue: Number((totalQty * stock.price).toFixed(2)),
-                }
-              : p
-          );
-        } else {
-          return [
-            ...prev,
-            {
-              symbol: pendingOrder.symbol,
-              qty: pendingOrder.qty,
-              avgPrice: stock.price,
-              currentPrice: stock.price,
-              marketValue: pendingOrder.qty * stock.price,
-              unrealizedPL: 0,
-              unrealizedPLPercent: 0,
-            },
-          ];
-        }
+    try {
+      // Submit order to Alpaca
+      const { data, error } = await supabase.functions.invoke('market-data', {
+        body: {
+          action: 'submit_order',
+          orderSymbol: pendingOrder.symbol,
+          qty: pendingOrder.qty,
+          side: pendingOrder.side,
+          type: pendingOrder.type,
+          limitPrice: pendingOrder.limitPrice,
+          stopLoss: pendingOrder.stopLoss,
+          takeProfit: pendingOrder.takeProfit,
+        },
       });
 
-      setPortfolio((prev) => ({
-        ...prev,
-        cash: prev.cash - pendingOrder.qty * stock.price,
-      }));
-    } else {
-      setPositions((prev) => {
-        return prev
-          .map((p) => {
-            if (p.symbol === pendingOrder.symbol) {
-              const newQty = p.qty - pendingOrder.qty;
-              return newQty > 0
-                ? {
-                    ...p,
-                    qty: newQty,
-                    marketValue: Number((newQty * stock.price).toFixed(2)),
-                  }
-                : null;
-            }
-            return p;
-          })
-          .filter(Boolean) as Position[];
-      });
+      if (error) {
+        throw new Error(error.message || 'Order submission failed');
+      }
 
-      setPortfolio((prev) => ({
-        ...prev,
-        cash: prev.cash + pendingOrder.qty * stock.price,
-      }));
+      if (!data?.success) {
+        throw new Error(data?.error || 'Order was not accepted');
+      }
+
+      // Create local order record
+      const order: Order = {
+        id: data.data?.id || generateId(),
+        ...pendingOrder,
+        status: 'filled',
+        timestamp: new Date(),
+      };
+
+      setOrders((prev) => [...prev, order]);
+
+      // Add confirmation message
+      const confirmationMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: `✅ Order submitted! ${pendingOrder.side.toUpperCase()} ${pendingOrder.qty} ${pendingOrder.symbol} @ ~$${currentPrice.toFixed(2)}${pendingOrder.stopLoss ? ` with stop loss at $${pendingOrder.stopLoss.toFixed(2)}` : ''}${pendingOrder.takeProfit ? ` and take profit at $${pendingOrder.takeProfit.toFixed(2)}` : ''}. Refreshing your portfolio...`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, confirmationMessage]);
+      toast.success(`Order submitted: ${pendingOrder.side.toUpperCase()} ${pendingOrder.qty} ${pendingOrder.symbol}`);
+
+      // Refetch all data to sync with Alpaca
+      setTimeout(async () => {
+        await refetchAllData();
+        const syncMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: `📊 Portfolio synced! Your positions and balances have been updated.`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, syncMessage]);
+      }, 2000); // Give Alpaca a moment to process
+
+    } catch (err) {
+      console.error('Order submission error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to submit order';
+      toast.error(errorMessage);
+      
+      const errorChatMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: `⚠️ Order failed: ${errorMessage}. Please try again or adjust your order parameters.`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorChatMessage]);
     }
 
-    // Add confirmation message
-    const confirmationMessage: ChatMessage = {
-      id: generateId(),
-      role: 'assistant',
-      content: `Order confirmed and filled! ${pendingOrder.side.toUpperCase()} ${pendingOrder.qty} ${pendingOrder.symbol} @ $${stock.price.toFixed(2)}${pendingOrder.stopLoss ? ` with stop loss at $${pendingOrder.stopLoss.toFixed(2)}` : ''}. Your portfolio has been updated.`,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, confirmationMessage]);
-    toast.success(`Order filled: ${pendingOrder.side.toUpperCase()} ${pendingOrder.qty} ${pendingOrder.symbol}`);
-
     setPendingOrder(null);
-  }, [pendingOrder, watchlist]);
+  }, [pendingOrder, watchlist, refetchAllData]);
 
   // Cancel order
   const cancelOrder = useCallback(() => {
