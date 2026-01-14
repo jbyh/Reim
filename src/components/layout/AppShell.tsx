@@ -32,6 +32,7 @@ export const AppShell = () => {
     orders,
     messages,
     pendingOrder,
+    orderStatus,
     isLoading,
     activities,
     isLoadingActivities,
@@ -194,6 +195,7 @@ export const AppShell = () => {
         isLoading={isLoading}
         currentTab={activeTab}
         currentSymbol={optionsSymbol}
+        orderStatus={orderStatus}
         onSendMessage={sendMessage}
         onConfirmOrder={confirmOrder}
         onCancelOrder={cancelOrder}

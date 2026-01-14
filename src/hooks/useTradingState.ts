@@ -54,6 +54,7 @@ export const useTradingState = () => {
     },
   ]);
   const [pendingOrder, setPendingOrder] = useState<OrderIntent | null>(null);
+  const [orderStatus, setOrderStatus] = useState<'pending' | 'submitting' | 'confirmed' | 'failed' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const conversationHistory = useRef<Array<{ role: string; content: string }>>([]);
 
@@ -397,21 +398,24 @@ export const useTradingState = () => {
   const confirmOrder = useCallback(async () => {
     if (!pendingOrder) return;
 
-    const stock = watchlist.find((s) => s.symbol === pendingOrder.symbol);
-    const currentPrice = stock?.price || pendingOrder.limitPrice || 0;
+    const submittingOrder = pendingOrder;
+    const stock = watchlist.find((s) => s.symbol === submittingOrder.symbol);
+    const currentPrice = stock?.price || submittingOrder.limitPrice || 0;
+
+    setOrderStatus('submitting');
 
     try {
       // Submit order to Alpaca
       const { data, error } = await supabase.functions.invoke('market-data', {
         body: {
           action: 'submit_order',
-          orderSymbol: pendingOrder.symbol,
-          qty: pendingOrder.qty,
-          side: pendingOrder.side,
-          type: pendingOrder.type,
-          limitPrice: pendingOrder.limitPrice,
-          stopLoss: pendingOrder.stopLoss,
-          takeProfit: pendingOrder.takeProfit,
+          orderSymbol: submittingOrder.symbol,
+          qty: submittingOrder.qty,
+          side: submittingOrder.side,
+          type: submittingOrder.type,
+          limitPrice: submittingOrder.limitPrice,
+          stopLoss: submittingOrder.stopLoss,
+          takeProfit: submittingOrder.takeProfit,
         },
       });
 
@@ -426,22 +430,24 @@ export const useTradingState = () => {
       // Create local order record
       const order: Order = {
         id: data.data?.id || generateId(),
-        ...pendingOrder,
+        ...submittingOrder,
         status: 'filled',
         timestamp: new Date(),
       };
 
       setOrders((prev) => [...prev, order]);
+      setPendingOrder(null);
+      setOrderStatus('confirmed');
 
       // Add confirmation message
       const confirmationMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: `✅ Order submitted! ${pendingOrder.side.toUpperCase()} ${pendingOrder.qty} ${pendingOrder.symbol} @ ~$${currentPrice.toFixed(2)}${pendingOrder.stopLoss ? ` with stop loss at $${pendingOrder.stopLoss.toFixed(2)}` : ''}${pendingOrder.takeProfit ? ` and take profit at $${pendingOrder.takeProfit.toFixed(2)}` : ''}. Refreshing your portfolio...`,
+        content: `✅ Submitted: ${submittingOrder.side.toUpperCase()} ${submittingOrder.qty} ${submittingOrder.symbol} @ ~$${currentPrice.toFixed(2)}. Syncing…`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, confirmationMessage]);
-      toast.success(`Order submitted: ${pendingOrder.side.toUpperCase()} ${pendingOrder.qty} ${pendingOrder.symbol}`);
+      toast.success(`Order submitted: ${submittingOrder.side.toUpperCase()} ${submittingOrder.qty} ${submittingOrder.symbol}`);
 
       // Refetch all data to sync with Alpaca
       setTimeout(async () => {
@@ -449,27 +455,31 @@ export const useTradingState = () => {
         const syncMessage: ChatMessage = {
           id: generateId(),
           role: 'assistant',
-          content: `📊 Portfolio synced! Your positions and balances have been updated.`,
+          content: `📊 Synced. Positions & balances updated.`,
           timestamp: new Date(),
         };
         setMessages((prev) => [...prev, syncMessage]);
-      }, 2000); // Give Alpaca a moment to process
+      }, 1500);
 
+      // Clear status after a moment
+      setTimeout(() => setOrderStatus(null), 4000);
     } catch (err) {
       console.error('Order submission error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit order';
       toast.error(errorMessage);
-      
+
+      setOrderStatus('failed');
+
       const errorChatMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
-        content: `⚠️ Order failed: ${errorMessage}. Please try again or adjust your order parameters.`,
+        content: `⚠️ Order failed: ${errorMessage}.`,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorChatMessage]);
-    }
 
-    setPendingOrder(null);
+      setTimeout(() => setOrderStatus(null), 5000);
+    }
   }, [pendingOrder, watchlist, refetchAllData]);
 
   // Cancel order
