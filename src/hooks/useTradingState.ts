@@ -554,6 +554,7 @@ export const useTradingState = () => {
     orders,
     messages,
     pendingOrder,
+    orderStatus,
     isLoading,
     activities,
     isLoadingActivities,
