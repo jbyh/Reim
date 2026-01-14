@@ -1,10 +1,8 @@
 import { useMemo } from 'react';
 import { Stock, OrderIntent } from '@/types/trading';
 import { PriceWidget } from './PriceWidget';
-import { TradeTicketWidget } from './TradeTicketWidget';
-import { MiniChart } from './MiniChart';
 import { cn } from '@/lib/utils';
-import { TrendingUp, TrendingDown, Info, Lightbulb, AlertTriangle } from 'lucide-react';
+import { Lightbulb, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface AIMessageRendererProps {
   content: string;
@@ -25,31 +23,17 @@ export const AIMessageRenderer = ({
   const parsedContent = useMemo(() => {
     const parts: ParsedContent[] = [];
     
-    // Check for JSON order intent first
+    // Strip JSON order intent (the actual trade ticket is rendered separately in the UI)
     const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
     let remainingContent = content;
-    
+
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[1]);
         if (parsed.type === 'order_intent') {
-          const stock = watchlist.find(s => s.symbol === parsed.symbol);
           parts.push({
-            type: 'order',
-            content: '',
-            data: {
-              order: {
-                symbol: parsed.symbol,
-                qty: parsed.quantity,
-                side: parsed.side,
-                type: parsed.orderType || 'market',
-                limitPrice: parsed.suggestions?.limitPrice,
-                stopLoss: parsed.suggestions?.stopLoss,
-                takeProfit: parsed.suggestions?.takeProfit,
-              },
-              stock,
-              reasoning: parsed.suggestions?.reasoning,
-            }
+            type: 'insight',
+            content: `Trade ticket ready for ${parsed.side?.toUpperCase()} ${parsed.quantity} ${parsed.symbol}.`,
           });
           remainingContent = content.replace(jsonMatch[0], '').trim();
         }
@@ -57,7 +41,7 @@ export const AIMessageRenderer = ({
         // Not valid JSON, ignore
       }
     }
-    
+
     // Parse remaining content for special formatting
     const lines = remainingContent.split('\n');
     let currentBlock: string[] = [];
@@ -115,19 +99,8 @@ export const AIMessageRenderer = ({
   return (
     <div className="space-y-3">
       {parsedContent.map((part, index) => {
-        switch (part.type) {
-          case 'order':
-            return (
-              <TradeTicketWidget
-                key={index}
-                order={part.data.order}
-                stock={part.data.stock}
-                reasoning={part.data.reasoning}
-                showActions={false}
-              />
-            );
-          
-          case 'price':
+          switch (part.type) {
+            case 'price':
             return (
               <PriceWidget 
                 key={index} 

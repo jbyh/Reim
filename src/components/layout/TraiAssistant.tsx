@@ -74,60 +74,65 @@ export const TraiAssistant = ({
 
   // Context-aware quick actions based on current page
   const quickActions = useMemo((): QuickAction[] => {
+    // If there's a pending order, prioritize execution controls.
+    if (pendingOrder) {
+      return [
+        { label: 'Confirm & Execute', action: '__confirm_order__', icon: CheckCircle2, variant: 'success' },
+        { label: 'Cancel', action: '__cancel_order__', icon: X, variant: 'warning' },
+        { label: 'Adjust', action: 'Adjust the order (qty/limit/stop/target) before I confirm.', icon: Settings, variant: 'primary' },
+      ];
+    }
+
     const baseActions: QuickAction[] = [];
 
     switch (currentTab) {
       case 'dashboard':
         baseActions.push(
           { label: "What's moving?", action: "What's moving in the market today?", icon: TrendingUp, variant: 'primary' },
-          { label: "Portfolio review", action: "Review my portfolio performance", icon: PieChart, variant: 'success' },
-          { label: "Find options", action: "Find me some good options plays", icon: Layers, variant: 'warning' }
+          { label: 'Portfolio review', action: 'Review my portfolio performance', icon: PieChart, variant: 'success' },
+          { label: 'Find options', action: 'Find me some good options plays', icon: Layers, variant: 'warning' }
         );
         break;
       case 'watchlist':
         baseActions.push(
-          { label: "Top gainers", action: "Show me the top gainers from my watchlist", icon: TrendingUp, variant: 'success' },
-          { label: "Risk analysis", action: "Analyze the risk in my watchlist", icon: Eye, variant: 'warning' }
+          { label: 'Top gainers', action: 'Show me the top gainers from my watchlist', icon: TrendingUp, variant: 'success' },
+          { label: 'Risk analysis', action: 'Analyze the risk in my watchlist', icon: Eye, variant: 'warning' }
         );
         break;
       case 'portfolio':
         if (positions.length > 0) {
           const topPosition = positions[0];
-          baseActions.push(
-            { label: `Analyze ${topPosition.symbol}`, action: `Analyze my ${topPosition.symbol} position`, icon: Eye, variant: 'primary' }
-          );
+          baseActions.push({ label: `Analyze ${topPosition.symbol}`, action: `Analyze my ${topPosition.symbol} position`, icon: Eye, variant: 'primary' });
         }
         baseActions.push(
-          { label: "Rebalance tips", action: "Should I rebalance my portfolio?", icon: PieChart, variant: 'success' },
-          { label: "Exit strategies", action: "What are my best exit strategies?", icon: TrendingUp, variant: 'warning' }
+          { label: 'Rebalance tips', action: 'Should I rebalance my portfolio?', icon: PieChart, variant: 'success' },
+          { label: 'Exit strategies', action: 'What are my best exit strategies?', icon: TrendingUp, variant: 'warning' }
         );
         break;
       case 'options':
         if (currentSymbol) {
           baseActions.push(
             { label: `${currentSymbol} analysis`, action: `Analyze options for ${currentSymbol}`, icon: Layers, variant: 'primary' },
-            { label: "Best strikes", action: `What strike prices look good for ${currentSymbol}?`, icon: TrendingUp, variant: 'success' }
+            { label: 'Best strikes', action: `What strike prices look good for ${currentSymbol}?`, icon: TrendingUp, variant: 'success' }
           );
         }
-        baseActions.push(
-          { label: "IV insights", action: "Where is implied volatility high right now?", icon: Eye, variant: 'warning' }
-        );
+        baseActions.push({ label: 'IV insights', action: 'Where is implied volatility high right now?', icon: Eye, variant: 'warning' });
         break;
       case 'history':
         baseActions.push(
-          { label: "Trade analysis", action: "Analyze my recent trading patterns", icon: Eye, variant: 'primary' },
-          { label: "P&L breakdown", action: "Break down my profit and losses", icon: PieChart, variant: 'success' }
+          { label: 'Trade analysis', action: 'Analyze my recent trading patterns', icon: Eye, variant: 'primary' },
+          { label: 'P&L breakdown', action: 'Break down my profit and losses', icon: PieChart, variant: 'success' }
         );
         break;
       default:
         baseActions.push(
-          { label: "Market pulse", action: "Give me a quick market pulse", icon: TrendingUp, variant: 'primary' },
-          { label: "Trade ideas", action: "What are some trade ideas for today?", icon: Sparkles, variant: 'success' }
+          { label: 'Market pulse', action: 'Give me a quick market pulse', icon: TrendingUp, variant: 'primary' },
+          { label: 'Trade ideas', action: 'What are some trade ideas for today?', icon: Sparkles, variant: 'success' }
         );
     }
 
     return baseActions.slice(0, 3);
-  }, [currentTab, currentSymbol, positions]);
+  }, [currentTab, currentSymbol, positions, pendingOrder]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -156,6 +161,15 @@ export const TraiAssistant = ({
   };
 
   const handleQuickAction = (action: string) => {
+    if (action === '__confirm_order__') {
+      onConfirmOrder();
+      return;
+    }
+    if (action === '__cancel_order__') {
+      onCancelOrder();
+      return;
+    }
+
     onSendMessage(action);
     if (!isExpanded) {
       setIsExpanded(true);
