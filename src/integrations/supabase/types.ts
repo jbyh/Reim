@@ -16,9 +16,9 @@ export type Database = {
     Tables: {
       profiles: {
         Row: {
-          alpaca_api_key: string | null
+          alpaca_api_key_encrypted: string | null
           alpaca_paper_trading: boolean
-          alpaca_secret_key: string | null
+          alpaca_secret_key_encrypted: string | null
           created_at: string
           display_name: string | null
           email: string | null
@@ -27,9 +27,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          alpaca_api_key?: string | null
+          alpaca_api_key_encrypted?: string | null
           alpaca_paper_trading?: boolean
-          alpaca_secret_key?: string | null
+          alpaca_secret_key_encrypted?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null
@@ -38,9 +38,9 @@ export type Database = {
           user_id: string
         }
         Update: {
-          alpaca_api_key?: string | null
+          alpaca_api_key_encrypted?: string | null
           alpaca_paper_trading?: boolean
-          alpaca_secret_key?: string | null
+          alpaca_secret_key_encrypted?: string | null
           created_at?: string
           display_name?: string | null
           email?: string | null

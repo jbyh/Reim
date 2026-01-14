@@ -75,7 +75,7 @@ export const TopBar = ({ activeTab, onMenuClick, onTabChange }: TopBarProps) => 
         </div>
         
         {/* API Key Status */}
-        {user && !profile?.alpaca_api_key && (
+        {user && !profile?.alpaca_api_key_encrypted && (
           <button 
             onClick={() => navigate('/profile')}
             className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-warning/10 border border-warning/30 hover:bg-warning/20 transition-colors"
