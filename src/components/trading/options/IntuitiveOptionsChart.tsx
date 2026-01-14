@@ -399,11 +399,23 @@ export const IntuitiveOptionsChart = ({
     handleInteraction(e.clientX, e.clientY, true);
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    handleInteraction(touch.clientX, touch.clientY, false);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault();
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    handleInteraction(touch.clientX, touch.clientY, false);
+  };
+
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (e.touches.length > 0) {
-      const touch = e.touches[0];
-      handleInteraction(touch.clientX, touch.clientY, true);
-    }
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    handleInteraction(touch.clientX, touch.clientY, true);
   };
 
   return (

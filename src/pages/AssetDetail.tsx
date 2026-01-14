@@ -256,13 +256,32 @@ export const AssetDetail = () => {
                 </div>
               </div>
 
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-3">
                 <button onClick={() => handleQuickTrade('buy')} className="btn-buy">
                   Buy {stock.symbol}
                 </button>
                 <button onClick={() => handleQuickTrade('sell')} className="btn-sell">
                   Sell {stock.symbol}
                 </button>
+                <Button 
+                  onClick={() => navigate(`/options/${stock.symbol}`)} 
+                  variant="outline" 
+                  className="rounded-xl border-primary/40 hover:bg-primary/10"
+                >
+                  <LineChart className="h-4 w-4 mr-2" />
+                  Options
+                </Button>
+                <Button 
+                  onClick={() => {
+                    sendMessage(`Tell me about ${stock.symbol} - analyze the current price action and suggest trade ideas`);
+                    navigate('/');
+                  }} 
+                  variant="outline" 
+                  className="rounded-xl border-highlight/40 hover:bg-highlight/10"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  AI Coach
+                </Button>
               </div>
             </div>
           </div>
