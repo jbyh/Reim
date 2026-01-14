@@ -1,15 +1,18 @@
 import { Stock } from '@/types/trading';
-import { TrendingUp, TrendingDown, Eye, ChevronRight, Sparkles, Search } from 'lucide-react';
+import { TrendingUp, TrendingDown, Eye, ChevronRight, Sparkles, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { MiniChart } from './widgets/MiniChart';
 import { useState } from 'react';
+import { WatchlistSearch } from './WatchlistSearch';
 
 interface WatchlistProps {
   stocks: Stock[];
+  onAddSymbol?: (symbol: string) => void;
+  onRemoveSymbol?: (symbol: string) => void;
 }
 
-export const Watchlist = ({ stocks }: WatchlistProps) => {
+export const Watchlist = ({ stocks, onAddSymbol, onRemoveSymbol }: WatchlistProps) => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -21,28 +24,38 @@ export const Watchlist = ({ stocks }: WatchlistProps) => {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-5 border-b border-border/30">
+      <div className="p-4 md:p-5 border-b border-border/30">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-primary/20">
-              <Eye className="h-5 w-5 text-primary" />
+            <div className="p-2 md:p-2.5 rounded-xl bg-primary/20">
+              <Eye className="h-4 w-4 md:h-5 md:w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">Watchlist</h2>
-              <p className="text-xs text-muted-foreground">{stocks.length} symbols tracked</p>
+              <h2 className="text-base md:text-lg font-bold text-foreground">Watchlist</h2>
+              <p className="text-xs text-muted-foreground">{stocks.length} symbols</p>
             </div>
           </div>
         </div>
 
-        {/* Search */}
+        {/* Add Symbol Search */}
+        {onAddSymbol && (
+          <div className="mb-3">
+            <WatchlistSearch 
+              onAddSymbol={onAddSymbol} 
+              existingSymbols={stocks.map(s => s.symbol)} 
+            />
+          </div>
+        )}
+
+        {/* Filter existing */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search symbols..."
+            placeholder="Filter watchlist..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-secondary/60 border border-border/40 rounded-xl pl-10 pr-4 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+            className="w-full bg-secondary/40 border border-border/30 rounded-xl pl-10 pr-4 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
           />
         </div>
       </div>

@@ -50,6 +50,8 @@ export const TradingDashboard = () => {
     confirmOrder,
     cancelOrder,
     fetchActivities,
+    addToWatchlist,
+    removeFromWatchlist,
   } = useTradingState();
 
   const dailyPL = portfolio.dayPL;

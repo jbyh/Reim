@@ -489,6 +489,56 @@ export const useTradingState = () => {
     setPendingOrder(null);
   }, [pendingOrder]);
 
+  // Add a symbol to watchlist
+  const addToWatchlist = useCallback(async (symbol: string) => {
+    const upperSymbol = symbol.toUpperCase();
+    
+    // Check if already in watchlist
+    if (watchlist.some(s => s.symbol === upperSymbol)) {
+      toast.info(`${upperSymbol} is already in your watchlist`);
+      return;
+    }
+
+    // Fetch the price for the new symbol
+    try {
+      const { data, error } = await supabase.functions.invoke('market-data', {
+        body: { symbols: [upperSymbol] }
+      });
+
+      if (!error && data?.data?.[upperSymbol]) {
+        const md = data.data[upperSymbol];
+        setWatchlist(prev => [...prev, {
+          symbol: upperSymbol,
+          name: STOCK_NAMES[upperSymbol] || upperSymbol,
+          price: Number(md.lastPrice?.toFixed(2) || 0),
+          change: Number(md.change?.toFixed(2) || 0),
+          changePercent: Number(md.changePercent?.toFixed(2) || 0),
+          bidPrice: md.bidPrice,
+          askPrice: md.askPrice,
+        }]);
+        toast.success(`Added ${upperSymbol} to watchlist`);
+      } else {
+        // Add with zero price, will be updated on next refresh
+        setWatchlist(prev => [...prev, {
+          symbol: upperSymbol,
+          name: STOCK_NAMES[upperSymbol] || upperSymbol,
+          price: 0,
+          change: 0,
+          changePercent: 0,
+        }]);
+        toast.success(`Added ${upperSymbol} to watchlist`);
+      }
+    } catch {
+      toast.error(`Failed to add ${upperSymbol}`);
+    }
+  }, [watchlist]);
+
+  // Remove a symbol from watchlist
+  const removeFromWatchlist = useCallback((symbol: string) => {
+    setWatchlist(prev => prev.filter(s => s.symbol !== symbol));
+    toast.success(`Removed ${symbol} from watchlist`);
+  }, []);
+
   return {
     watchlist,
     positions,
@@ -503,5 +553,7 @@ export const useTradingState = () => {
     confirmOrder,
     cancelOrder,
     fetchActivities,
+    addToWatchlist,
+    removeFromWatchlist,
   };
 };
