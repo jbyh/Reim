@@ -82,6 +82,82 @@ serve(async (req) => {
       });
     }
 
+    // Submit order to Alpaca
+    if (action === 'submit_order') {
+      const { orderSymbol, qty, side, type, limitPrice, stopLoss, takeProfit } = body;
+      
+      if (!orderSymbol || !qty || !side) {
+        throw new Error('Missing required order parameters: symbol, qty, side');
+      }
+
+      const orderPayload: Record<string, any> = {
+        symbol: orderSymbol,
+        qty: String(qty),
+        side: side,
+        type: type || 'market',
+        time_in_force: 'day',
+      };
+
+      // Add limit price for limit orders
+      if (type === 'limit' && limitPrice) {
+        orderPayload.limit_price = String(limitPrice);
+      }
+
+      // Create order with optional bracket (stop loss / take profit)
+      if (stopLoss || takeProfit) {
+        orderPayload.order_class = 'bracket';
+        if (stopLoss) {
+          orderPayload.stop_loss = { stop_price: String(stopLoss) };
+        }
+        if (takeProfit) {
+          orderPayload.take_profit = { limit_price: String(takeProfit) };
+        }
+      }
+
+      console.log('Submitting order to Alpaca:', orderPayload);
+
+      const response = await fetch(`${ALPACA_TRADING_URL}/orders`, {
+        method: 'POST',
+        headers: {
+          ...alpacaHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Alpaca order error:', response.status, errorText);
+        throw new Error(`Order failed: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Order submitted successfully:', data.id);
+      
+      return new Response(JSON.stringify({ data, success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Get orders
+    if (action === 'orders') {
+      const url = new URL(`${ALPACA_TRADING_URL}/orders`);
+      url.searchParams.set('status', 'all');
+      url.searchParams.set('limit', '50');
+      url.searchParams.set('direction', 'desc');
+      
+      const response = await fetch(url.toString(), {
+        headers: alpacaHeaders,
+      });
+      if (!response.ok) {
+        throw new Error(`Alpaca API error: ${response.status}`);
+      }
+      const data = await response.json();
+      return new Response(JSON.stringify({ data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (action === 'bars' && symbol) {
       const url = new URL(`${ALPACA_DATA_URL}/stocks/${symbol}/bars`);
       url.searchParams.set('timeframe', timeframe || '1Day');
