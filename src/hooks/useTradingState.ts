@@ -176,6 +176,15 @@ export const useTradingState = () => {
     }
   }, []);
 
+  // Refetch all portfolio data (for use after order submission)
+  const refetchAllData = useCallback(async () => {
+    await Promise.all([
+      fetchAccountData(),
+      fetchPositions(),
+      fetchActivities(),
+    ]);
+  }, [fetchAccountData, fetchPositions, fetchActivities]);
+
   // Fetch all data on mount
   useEffect(() => {
     fetchAccountData();
@@ -383,14 +392,6 @@ export const useTradingState = () => {
     [isLoading, streamAIResponse]
   );
 
-  // Refetch all portfolio data
-  const refetchAllData = useCallback(async () => {
-    await Promise.all([
-      fetchAccountData(),
-      fetchPositions(),
-      fetchActivities(),
-    ]);
-  }, [fetchAccountData, fetchPositions, fetchActivities]);
 
   // Confirm order - submit to Alpaca and refetch data
   const confirmOrder = useCallback(async () => {
