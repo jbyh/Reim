@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,7 +7,6 @@ const corsHeaders = {
 };
 
 const ALPACA_DATA_URL = 'https://data.alpaca.markets/v2';
-const ALPACA_TRADING_URL = 'https://paper-api.alpaca.markets/v2';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -14,14 +14,51 @@ serve(async (req) => {
   }
 
   try {
-    const rawKey = Deno.env.get('ALPACA_API_KEY');
-    const rawSecret = Deno.env.get('ALPACA_API_SECRET');
+    // Initialize Supabase client to get user's credentials
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const ALPACA_API_KEY = rawKey?.trim();
-    const ALPACA_API_SECRET = rawSecret?.trim();
+    // Get auth token from request
+    const authHeader = req.headers.get('Authorization');
+    let userId: string | null = null;
+    let userAlpacaKey: string | null = null;
+    let userAlpacaSecret: string | null = null;
+    let paperTrading = true;
+
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await supabase.auth.getUser(token);
+      
+      if (user) {
+        userId = user.id;
+        
+        // Fetch user's Alpaca credentials from their profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('alpaca_api_key, alpaca_secret_key, alpaca_paper_trading')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (profile?.alpaca_api_key && profile?.alpaca_secret_key) {
+          userAlpacaKey = profile.alpaca_api_key;
+          userAlpacaSecret = profile.alpaca_secret_key;
+          paperTrading = profile.alpaca_paper_trading ?? true;
+        }
+      }
+    }
+
+    // Fallback to environment variables if no user credentials
+    const ALPACA_API_KEY = userAlpacaKey || Deno.env.get('ALPACA_API_KEY')?.trim();
+    const ALPACA_API_SECRET = userAlpacaSecret || Deno.env.get('ALPACA_API_SECRET')?.trim();
+
+    // Set trading URL based on paper/live mode
+    const ALPACA_TRADING_URL = paperTrading 
+      ? 'https://paper-api.alpaca.markets/v2'
+      : 'https://api.alpaca.markets/v2';
 
     if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
-      throw new Error('Alpaca API credentials not configured');
+      throw new Error('Alpaca API credentials not configured. Please add your API keys in Settings.');
     }
 
     // Guard against accidentally pasting labels like "ALPACA_API_KEY=..."
@@ -44,7 +81,9 @@ serve(async (req) => {
         headers: alpacaHeaders,
       });
       if (!response.ok) {
-        throw new Error(`Alpaca API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Alpaca account error:', response.status, errorText);
+        throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
       return new Response(JSON.stringify({ data }), {
@@ -57,7 +96,9 @@ serve(async (req) => {
         headers: alpacaHeaders,
       });
       if (!response.ok) {
-        throw new Error(`Alpaca API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Alpaca positions error:', response.status, errorText);
+        throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
       return new Response(JSON.stringify({ data }), {
@@ -74,7 +115,9 @@ serve(async (req) => {
         headers: alpacaHeaders,
       });
       if (!response.ok) {
-        throw new Error(`Alpaca API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Alpaca activities error:', response.status, errorText);
+        throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
       return new Response(JSON.stringify({ data }), {
@@ -115,6 +158,7 @@ serve(async (req) => {
       }
 
       console.log('Submitting order to Alpaca:', orderPayload);
+      console.log('Using trading URL:', ALPACA_TRADING_URL);
 
       const response = await fetch(`${ALPACA_TRADING_URL}/orders`, {
         method: 'POST',
@@ -132,7 +176,7 @@ serve(async (req) => {
       }
 
       const data = await response.json();
-      console.log('Order submitted successfully:', data.id);
+      console.log('Order submitted successfully:', data.id, 'Status:', data.status);
       
       return new Response(JSON.stringify({ data, success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -150,7 +194,9 @@ serve(async (req) => {
         headers: alpacaHeaders,
       });
       if (!response.ok) {
-        throw new Error(`Alpaca API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Alpaca orders error:', response.status, errorText);
+        throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
       return new Response(JSON.stringify({ data }), {
@@ -169,7 +215,9 @@ serve(async (req) => {
         headers: alpacaHeaders,
       });
       if (!response.ok) {
-        throw new Error(`Alpaca API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error('Alpaca bars error:', response.status, errorText);
+        throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
       return new Response(JSON.stringify({ data }), {
@@ -259,7 +307,7 @@ serve(async (req) => {
     const msg = error instanceof Error ? error.message : 'Unknown error';
 
     // Alpaca uses 401 for invalid/expired keys or wrong environment (paper vs live)
-    const isUnauthorized = msg.includes('Alpaca API error: 401') || msg.includes('401 Authorization Required');
+    const isUnauthorized = msg.includes('401') || msg.includes('Authorization');
 
     console.error('Market data error:', error);
 
@@ -267,7 +315,7 @@ serve(async (req) => {
       JSON.stringify({
         error: msg,
         hint: isUnauthorized
-          ? 'Unauthorized from Alpaca. Double-check you pasted the raw KEY and SECRET (no prefixes/spaces) and that they match your Alpaca paper/live account.'
+          ? 'Unauthorized from Alpaca. Please check your API keys in Settings and make sure they match your paper/live account.'
           : undefined,
       }),
       {

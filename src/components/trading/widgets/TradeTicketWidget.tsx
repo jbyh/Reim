@@ -1,5 +1,5 @@
 import { OrderIntent, Stock } from '@/types/trading';
-import { ArrowUpRight, ArrowDownRight, Target, Shield, DollarSign, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Target, Shield, DollarSign, TrendingUp, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { MiniChart } from './MiniChart';
@@ -11,6 +11,7 @@ interface TradeTicketWidgetProps {
   onConfirm?: () => void;
   onCancel?: () => void;
   showActions?: boolean;
+  isSubmitting?: boolean;
 }
 
 export const TradeTicketWidget = ({ 
@@ -19,7 +20,8 @@ export const TradeTicketWidget = ({
   reasoning,
   onConfirm, 
   onCancel,
-  showActions = true 
+  showActions = true,
+  isSubmitting = false
 }: TradeTicketWidgetProps) => {
   const isBuy = order.side === 'buy';
   const currentPrice = stock?.price || order.limitPrice || 0;
@@ -133,11 +135,13 @@ export const TradeTicketWidget = ({
               onClick={onCancel}
               variant="outline"
               className="flex-1 border-border/50"
+              disabled={isSubmitting}
             >
               Cancel
             </Button>
             <Button
               onClick={onConfirm}
+              disabled={isSubmitting}
               className={cn(
                 'flex-1',
                 isBuy 
@@ -145,7 +149,14 @@ export const TradeTicketWidget = ({
                   : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground'
               )}
             >
-              Confirm {order.side.toUpperCase()}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                `Confirm ${order.side.toUpperCase()}`
+              )}
             </Button>
           </div>
         )}
