@@ -14,16 +14,25 @@ serve(async (req) => {
   }
 
   try {
-    const ALPACA_API_KEY = Deno.env.get('ALPACA_API_KEY');
-    const ALPACA_API_SECRET = Deno.env.get('ALPACA_API_SECRET');
+    const rawKey = Deno.env.get('ALPACA_API_KEY');
+    const rawSecret = Deno.env.get('ALPACA_API_SECRET');
+
+    const ALPACA_API_KEY = rawKey?.trim();
+    const ALPACA_API_SECRET = rawSecret?.trim();
 
     if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
       throw new Error('Alpaca API credentials not configured');
     }
 
+    // Guard against accidentally pasting labels like "ALPACA_API_KEY=..."
+    if (ALPACA_API_KEY.includes('=') || ALPACA_API_SECRET.includes('=')) {
+      throw new Error('Alpaca API credentials look malformed (remove any KEY= / SECRET= prefix).');
+    }
+
     const alpacaHeaders = {
       'APCA-API-KEY-ID': ALPACA_API_KEY,
       'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
+      'Accept': 'application/json',
     };
 
     const body = await req.json();
