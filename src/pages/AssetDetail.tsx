@@ -1,9 +1,35 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, TrendingDown, Activity, DollarSign, BarChart3, Zap, Target, AlertTriangle, Sparkles } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Activity, BarChart3, Zap, Target, Sparkles, Search, LineChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useTradingState } from '@/hooks/useTradingState';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { StockSearch } from '@/components/trading/StockSearch';
+
+interface StockData {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  bidPrice?: number;
+  askPrice?: number;
+}
+
+// Stock name mappings
+const STOCK_NAMES: Record<string, string> = {
+  AAPL: 'Apple Inc.',
+  MSFT: 'Microsoft Corporation',
+  GOOGL: 'Alphabet Inc.',
+  AMZN: 'Amazon.com Inc.',
+  NVDA: 'NVIDIA Corporation',
+  TSLA: 'Tesla Inc.',
+  META: 'Meta Platforms Inc.',
+  SPY: 'SPDR S&P 500 ETF',
+  QQQ: 'Invesco QQQ Trust',
+  AMD: 'Advanced Micro Devices',
+};
 
 const generateChartData = (positive: boolean, points: number = 50) => {
   const data: number[] = [];
@@ -35,19 +61,111 @@ export const AssetDetail = () => {
   const navigate = useNavigate();
   const { watchlist, positions, sendMessage } = useTradingState();
   const [timeframe, setTimeframe] = useState<'1D' | '1W' | '1M' | '3M' | '1Y'>('1D');
+  const [stockData, setStockData] = useState<StockData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showSearch, setShowSearch] = useState(false);
 
-  const stock = watchlist.find(s => s.symbol === symbol?.toUpperCase());
-  const position = positions.find(p => p.symbol === symbol?.toUpperCase());
-  
+  const upperSymbol = symbol?.toUpperCase() || '';
+
+  // Try to find in watchlist first, otherwise fetch from API
+  const watchlistStock = watchlist.find(s => s.symbol === upperSymbol);
+  const position = positions.find(p => p.symbol === upperSymbol);
+
+  useEffect(() => {
+    const fetchStockData = async () => {
+      if (!upperSymbol) return;
+      
+      // If we have it in watchlist, use that data
+      if (watchlistStock) {
+        setStockData({
+          symbol: watchlistStock.symbol,
+          name: watchlistStock.name,
+          price: watchlistStock.price,
+          change: watchlistStock.change,
+          changePercent: watchlistStock.changePercent,
+          bidPrice: watchlistStock.bidPrice,
+          askPrice: watchlistStock.askPrice,
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Otherwise fetch from API
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('market-data', {
+          body: { symbols: [upperSymbol] }
+        });
+
+        if (!error && data?.data?.[upperSymbol]) {
+          const md = data.data[upperSymbol];
+          setStockData({
+            symbol: upperSymbol,
+            name: STOCK_NAMES[upperSymbol] || upperSymbol,
+            price: md.lastPrice || 0,
+            change: md.change || 0,
+            changePercent: md.changePercent || 0,
+            bidPrice: md.bidPrice,
+            askPrice: md.askPrice,
+          });
+        } else {
+          // Fallback with mock data if API fails
+          setStockData({
+            symbol: upperSymbol,
+            name: STOCK_NAMES[upperSymbol] || upperSymbol,
+            price: 0,
+            change: 0,
+            changePercent: 0,
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch stock data:', err);
+        setStockData({
+          symbol: upperSymbol,
+          name: STOCK_NAMES[upperSymbol] || upperSymbol,
+          price: 0,
+          change: 0,
+          changePercent: 0,
+        });
+      }
+      setIsLoading(false);
+    };
+
+    fetchStockData();
+  }, [upperSymbol, watchlistStock]);
+
+  const stock = stockData;
   const isPositive = stock ? stock.change >= 0 : true;
   const candleData = useMemo(() => generateCandleData(timeframe === '1D' ? 30 : 50), [timeframe]);
 
-  if (!stock) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">Asset not found</p>
-          <Button onClick={() => navigate('/')} className="rounded-xl">Back to Dashboard</Button>
+          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading {upperSymbol}...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!stock || stock.price === 0) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 rounded-2xl bg-secondary/60 flex items-center justify-center mx-auto mb-4">
+            <Search className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">Symbol not found</h2>
+          <p className="text-muted-foreground mb-6">
+            We couldn't find market data for "{upperSymbol}". Try searching for another stock.
+          </p>
+          <div className="mb-6">
+            <StockSearch placeholder="Search for a stock..." />
+          </div>
+          <Button onClick={() => navigate('/')} variant="outline" className="rounded-xl">
+            Back to Dashboard
+          </Button>
         </div>
       </div>
     );
