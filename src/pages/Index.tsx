@@ -5,8 +5,8 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>TradePilot AI - Intelligent Trading Assistant</title>
-        <meta name="description" content="Professional AI-powered trading coach with real-time market data, portfolio management, and intelligent trade execution." />
+        <title>TrAide - AI-Powered Trading Platform</title>
+        <meta name="description" content="Trade smarter with Trai AI. Real-time market data, intuitive options trading, and intelligent portfolio management." />
       </Helmet>
       <TradingDashboard />
     </>

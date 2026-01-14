@@ -49,7 +49,7 @@ export const useTradingState = () => {
     {
       id: generateId(),
       role: 'assistant',
-      content: "Good morning! I'm your AI Trading Coach powered by real market data. I can help you analyze markets, suggest smart order strategies including limit orders and stop losses, and execute your trades. What would you like to explore today?",
+      content: "Hey! I'm Trai, your AI trading companion. I have access to real-time market data for any stock - just ask me about any symbol. I can help you analyze markets, build smart orders with limit prices and stop losses, and explore options strategies. What's on your mind?",
       timestamp: new Date(),
     },
   ]);
