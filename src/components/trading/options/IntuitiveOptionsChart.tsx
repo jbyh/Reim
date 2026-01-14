@@ -440,6 +440,8 @@ export const IntuitiveOptionsChart = ({
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setHoverPoint(null)}
           onClick={handleClick}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         />
       </div>
