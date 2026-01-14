@@ -62,8 +62,8 @@ export const ChatPanel = ({
             <Sparkles className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gradient-purple-gold">AI Trading Coach</h2>
-            <p className="text-xs text-muted-foreground">Live market data • Smart order suggestions</p>
+            <h2 className="text-xl font-bold text-gradient-purple-gold">Trai</h2>
+            <p className="text-xs text-muted-foreground">Your AI trading companion • Live market data</p>
           </div>
         </div>
       </div>
