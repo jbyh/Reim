@@ -419,7 +419,7 @@ export const TradingDashboard = () => {
           {/* Options View */}
           {activeTab === 'options' && (
             <div className="h-full">
-              <OptionsView />
+              <OptionsViewNew />
             </div>
           )}
 
