@@ -10,6 +10,31 @@ const corsHeaders = {
 const ALPACA_DATA_URL = 'https://data.alpaca.markets/v2';
 const ALPACA_CRYPTO_URL = 'https://data.alpaca.markets/v1beta3/crypto/us';
 
+// Simple in-memory cache to reduce API calls and prevent rate limiting
+const cache: Map<string, { data: any; timestamp: number }> = new Map();
+const CACHE_TTL_MS = 5000; // 5 second cache for market data
+
+const getCached = (key: string): any | null => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCache = (key: string, data: any): void => {
+  cache.set(key, { data, timestamp: Date.now() });
+  // Cleanup old entries periodically
+  if (cache.size > 100) {
+    const now = Date.now();
+    for (const [k, v] of cache) {
+      if (now - v.timestamp > CACHE_TTL_MS * 2) {
+        cache.delete(k);
+      }
+    }
+  }
+};
+
 // Helper to detect crypto symbols (e.g., BTC/USD, ETH/USD)
 const isCryptoSymbol = (symbol: string): boolean => {
   return symbol.includes('/') || ['BTC', 'ETH', 'SOL', 'DOGE', 'AVAX', 'LINK', 'UNI', 'AAVE', 'LTC', 'BCH', 'XRP', 'ADA', 'DOT', 'SHIB', 'MATIC'].some(
@@ -274,6 +299,16 @@ serve(async (req) => {
       throw new Error('Symbols array is required for quotes');
     }
 
+    // Check cache first
+    const cacheKey = `quotes:${symbols.sort().join(',')}`;
+    const cachedData = getCached(cacheKey);
+    if (cachedData) {
+      console.log('Returning cached market data for:', symbols);
+      return new Response(JSON.stringify({ data: cachedData }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Separate stocks and crypto
     const stockSymbols = symbols.filter(s => !isCryptoSymbol(s));
     const cryptoSymbols = symbols.filter(s => isCryptoSymbol(s)).map(normalizeCryptoSymbol);
@@ -419,6 +454,9 @@ serve(async (req) => {
     }
 
     console.log('Market data fetched for:', symbols);
+    
+    // Cache the result
+    setCache(cacheKey, marketData);
 
     return new Response(JSON.stringify({ data: marketData }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

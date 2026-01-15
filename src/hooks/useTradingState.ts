@@ -232,11 +232,12 @@ export const useTradingState = () => {
     fetchActivities();
     fetchMarketData();
     
+    // Poll every 30 seconds to avoid Alpaca rate limits (200 req/min on free tier)
     const interval = setInterval(() => {
       fetchMarketData();
       fetchAccountData();
       fetchPositions();
-    }, 15000);
+    }, 30000);
     
     return () => clearInterval(interval);
   }, [fetchAccountData, fetchPositions, fetchActivities, fetchMarketData]);
