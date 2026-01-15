@@ -8,6 +8,20 @@ const corsHeaders = {
 };
 
 const ALPACA_DATA_URL = 'https://data.alpaca.markets/v2';
+const ALPACA_CRYPTO_URL = 'https://data.alpaca.markets/v1beta3/crypto/us';
+
+// Helper to detect crypto symbols (e.g., BTC/USD, ETH/USD)
+const isCryptoSymbol = (symbol: string): boolean => {
+  return symbol.includes('/') || ['BTC', 'ETH', 'SOL', 'DOGE', 'AVAX', 'LINK', 'UNI', 'AAVE', 'LTC', 'BCH', 'XRP', 'ADA', 'DOT', 'SHIB', 'MATIC'].some(
+    crypto => symbol.toUpperCase() === crypto || symbol.toUpperCase() === `${crypto}/USD`
+  );
+};
+
+// Normalize crypto symbol to Alpaca format (BTC -> BTC/USD)
+const normalizeCryptoSymbol = (symbol: string): string => {
+  if (symbol.includes('/')) return symbol.toUpperCase();
+  return `${symbol.toUpperCase()}/USD`;
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -135,12 +149,15 @@ serve(async (req) => {
         throw new Error('Missing required order parameters: symbol, qty, side');
       }
 
+      const isCrypto = isCryptoSymbol(orderSymbol);
+
       const orderPayload: Record<string, any> = {
         symbol: orderSymbol,
         qty: String(qty),
         side: side,
         type: type || 'market',
-        time_in_force: 'day',
+        // Crypto trades 24/7 so use 'gtc', stocks use 'day'
+        time_in_force: isCrypto ? 'gtc' : 'day',
       };
 
       // Add limit price for limit orders
@@ -148,8 +165,8 @@ serve(async (req) => {
         orderPayload.limit_price = String(limitPrice);
       }
 
-      // Create order with optional bracket (stop loss / take profit)
-      if (stopLoss || takeProfit) {
+      // Create order with optional bracket (stop loss / take profit) - only for stocks
+      if (!isCrypto && (stopLoss || takeProfit)) {
         orderPayload.order_class = 'bracket';
         if (stopLoss) {
           orderPayload.stop_loss = { stop_price: String(stopLoss) };
@@ -206,6 +223,31 @@ serve(async (req) => {
       });
     }
 
+    // Fetch crypto bars
+    if (action === 'crypto_bars' && symbol) {
+      const cryptoSymbol = normalizeCryptoSymbol(symbol);
+      const url = new URL(`${ALPACA_CRYPTO_URL}/bars`);
+      url.searchParams.set('symbols', cryptoSymbol);
+      url.searchParams.set('timeframe', timeframe || '1Day');
+      url.searchParams.set('limit', '365');
+      if (start) url.searchParams.set('start', start);
+      if (end) url.searchParams.set('end', end);
+
+      const response = await fetch(url.toString(), {
+        headers: alpacaHeaders,
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Alpaca crypto bars error:', response.status, errorText);
+        throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      return new Response(JSON.stringify({ data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Fetch stock bars
     if (action === 'bars' && symbol) {
       const url = new URL(`${ALPACA_DATA_URL}/stocks/${symbol}/bars`);
       url.searchParams.set('timeframe', timeframe || '1Day');
@@ -232,72 +274,148 @@ serve(async (req) => {
       throw new Error('Symbols array is required for quotes');
     }
 
-    const symbolsParam = symbols.join(',');
-    
-    // Fetch latest quotes (includes bid/ask)
-    const quotesResponse = await fetch(
-      `${ALPACA_DATA_URL}/stocks/quotes/latest?symbols=${symbolsParam}`,
-      { headers: alpacaHeaders }
-    );
+    // Separate stocks and crypto
+    const stockSymbols = symbols.filter(s => !isCryptoSymbol(s));
+    const cryptoSymbols = symbols.filter(s => isCryptoSymbol(s)).map(normalizeCryptoSymbol);
 
-    if (!quotesResponse.ok) {
-      const errorText = await quotesResponse.text();
-      console.error('Alpaca quotes error:', quotesResponse.status, errorText);
-      throw new Error(`Alpaca API error: ${quotesResponse.status}`);
-    }
-
-    const quotesData = await quotesResponse.json();
-
-    // Fetch latest trades (includes last trade price)
-    const tradesResponse = await fetch(
-      `${ALPACA_DATA_URL}/stocks/trades/latest?symbols=${symbolsParam}`,
-      { headers: alpacaHeaders }
-    );
-
-    if (!tradesResponse.ok) {
-      const errorText = await tradesResponse.text();
-      console.error('Alpaca trades error:', tradesResponse.status, errorText);
-      throw new Error(`Alpaca API error: ${tradesResponse.status}`);
-    }
-
-    const tradesData = await tradesResponse.json();
-
-    // Fetch previous day bars for change calculation
-    const barsResponse = await fetch(
-      `${ALPACA_DATA_URL}/stocks/bars?symbols=${symbolsParam}&timeframe=1Day&limit=2`,
-      { headers: alpacaHeaders }
-    );
-
-    let barsData: { bars: Record<string, Array<{ c: number }>> } = { bars: {} };
-    if (barsResponse.ok) {
-      barsData = await barsResponse.json() as { bars: Record<string, Array<{ c: number }>> };
-    }
-
-    // Combine data for each symbol
     const marketData: Record<string, any> = {};
-    
-    for (const sym of symbols) {
-      const quote = quotesData.quotes?.[sym];
-      const trade = tradesData.trades?.[sym];
-      const bars = barsData.bars?.[sym] || [];
-      
-      const lastPrice = trade?.p || quote?.ap || 0;
-      const prevClose = bars.length >= 2 ? bars[bars.length - 2]?.c : bars[0]?.c || lastPrice;
-      const change = lastPrice - prevClose;
-      const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
-      marketData[sym] = {
-        symbol: sym,
-        lastPrice: lastPrice,
-        bidPrice: quote?.bp || 0,
-        askPrice: quote?.ap || 0,
-        bidSize: quote?.bs || 0,
-        askSize: quote?.as || 0,
-        lastSize: trade?.s || 0,
-        change: change,
-        changePercent: changePercent,
-        timestamp: trade?.t || quote?.t || new Date().toISOString(),
-      };
+    // Fetch stock data
+    if (stockSymbols.length > 0) {
+      const symbolsParam = stockSymbols.join(',');
+      
+      // Fetch latest quotes (includes bid/ask)
+      const quotesResponse = await fetch(
+        `${ALPACA_DATA_URL}/stocks/quotes/latest?symbols=${symbolsParam}`,
+        { headers: alpacaHeaders }
+      );
+
+      if (!quotesResponse.ok) {
+        const errorText = await quotesResponse.text();
+        console.error('Alpaca quotes error:', quotesResponse.status, errorText);
+        throw new Error(`Alpaca API error: ${quotesResponse.status}`);
+      }
+
+      const quotesData = await quotesResponse.json();
+
+      // Fetch latest trades (includes last trade price)
+      const tradesResponse = await fetch(
+        `${ALPACA_DATA_URL}/stocks/trades/latest?symbols=${symbolsParam}`,
+        { headers: alpacaHeaders }
+      );
+
+      if (!tradesResponse.ok) {
+        const errorText = await tradesResponse.text();
+        console.error('Alpaca trades error:', tradesResponse.status, errorText);
+        throw new Error(`Alpaca API error: ${tradesResponse.status}`);
+      }
+
+      const tradesData = await tradesResponse.json();
+
+      // Fetch previous day bars for change calculation
+      const barsResponse = await fetch(
+        `${ALPACA_DATA_URL}/stocks/bars?symbols=${symbolsParam}&timeframe=1Day&limit=2`,
+        { headers: alpacaHeaders }
+      );
+
+      let barsData: { bars: Record<string, Array<{ c: number }>> } = { bars: {} };
+      if (barsResponse.ok) {
+        barsData = await barsResponse.json() as { bars: Record<string, Array<{ c: number }>> };
+      }
+
+      // Combine data for each stock symbol
+      for (const sym of stockSymbols) {
+        const quote = quotesData.quotes?.[sym];
+        const trade = tradesData.trades?.[sym];
+        const bars = barsData.bars?.[sym] || [];
+        
+        const lastPrice = trade?.p || quote?.ap || 0;
+        const prevClose = bars.length >= 2 ? bars[bars.length - 2]?.c : bars[0]?.c || lastPrice;
+        const change = lastPrice - prevClose;
+        const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+        marketData[sym] = {
+          symbol: sym,
+          lastPrice: lastPrice,
+          bidPrice: quote?.bp || 0,
+          askPrice: quote?.ap || 0,
+          bidSize: quote?.bs || 0,
+          askSize: quote?.as || 0,
+          lastSize: trade?.s || 0,
+          change: change,
+          changePercent: changePercent,
+          timestamp: trade?.t || quote?.t || new Date().toISOString(),
+          assetType: 'stock',
+        };
+      }
+    }
+
+    // Fetch crypto data
+    if (cryptoSymbols.length > 0) {
+      const cryptoSymbolsParam = cryptoSymbols.join(',');
+      
+      // Fetch latest crypto trades
+      const cryptoTradesResponse = await fetch(
+        `${ALPACA_CRYPTO_URL}/latest/trades?symbols=${cryptoSymbolsParam}`,
+        { headers: alpacaHeaders }
+      );
+
+      // Fetch latest crypto quotes
+      const cryptoQuotesResponse = await fetch(
+        `${ALPACA_CRYPTO_URL}/latest/quotes?symbols=${cryptoSymbolsParam}`,
+        { headers: alpacaHeaders }
+      );
+
+      // Fetch crypto bars for change calculation
+      const cryptoBarsResponse = await fetch(
+        `${ALPACA_CRYPTO_URL}/bars?symbols=${cryptoSymbolsParam}&timeframe=1Day&limit=2`,
+        { headers: alpacaHeaders }
+      );
+
+      let cryptoTradesData: { trades: Record<string, { p: number; s: number; t: string }> } = { trades: {} };
+      let cryptoQuotesData: { quotes: Record<string, { bp: number; ap: number; bs: number; as: number; t: string }> } = { quotes: {} };
+      let cryptoBarsData: { bars: Record<string, Array<{ c: number }>> } = { bars: {} };
+
+      if (cryptoTradesResponse.ok) {
+        cryptoTradesData = await cryptoTradesResponse.json();
+      }
+      if (cryptoQuotesResponse.ok) {
+        cryptoQuotesData = await cryptoQuotesResponse.json();
+      }
+      if (cryptoBarsResponse.ok) {
+        cryptoBarsData = await cryptoBarsResponse.json();
+      }
+
+      // Combine data for each crypto symbol
+      for (const cryptoSym of cryptoSymbols) {
+        const trade = cryptoTradesData.trades?.[cryptoSym];
+        const quote = cryptoQuotesData.quotes?.[cryptoSym];
+        const bars = cryptoBarsData.bars?.[cryptoSym] || [];
+        
+        const lastPrice = trade?.p || quote?.ap || 0;
+        const prevClose = bars.length >= 2 ? bars[bars.length - 2]?.c : bars[0]?.c || lastPrice;
+        const change = lastPrice - prevClose;
+        const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+        // Store with the original format the user requested (could be BTC or BTC/USD)
+        const originalSymbol = symbols.find(s => 
+          normalizeCryptoSymbol(s) === cryptoSym
+        ) || cryptoSym;
+
+        marketData[originalSymbol] = {
+          symbol: originalSymbol,
+          lastPrice: lastPrice,
+          bidPrice: quote?.bp || 0,
+          askPrice: quote?.ap || 0,
+          bidSize: quote?.bs || 0,
+          askSize: quote?.as || 0,
+          lastSize: trade?.s || 0,
+          change: change,
+          changePercent: changePercent,
+          timestamp: trade?.t || quote?.t || new Date().toISOString(),
+          assetType: 'crypto',
+        };
+      }
     }
 
     console.log('Market data fetched for:', symbols);
