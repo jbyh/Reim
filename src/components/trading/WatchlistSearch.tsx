@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Search, Plus, TrendingUp, TrendingDown, Loader2, X } from 'lucide-react';
+import { Search, Plus, TrendingUp, TrendingDown, Loader2, X, Bitcoin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
@@ -13,9 +13,12 @@ interface SearchResult {
   name: string;
   price: number;
   changePercent: number;
+  assetType: 'stock' | 'crypto';
 }
 
-const POPULAR_SYMBOLS = ['SPY', 'QQQ', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMZN', 'META', 'AMD', 'GOOGL', 'GME', 'COIN', 'PLTR'];
+const POPULAR_STOCKS = ['SPY', 'QQQ', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMZN', 'META', 'AMD', 'GOOGL'];
+const POPULAR_CRYPTO = ['BTC/USD', 'ETH/USD', 'SOL/USD', 'DOGE/USD', 'AVAX/USD', 'LINK/USD'];
+const POPULAR_SYMBOLS = [...POPULAR_STOCKS, ...POPULAR_CRYPTO];
 
 const STOCK_NAMES: Record<string, string> = {
   SPY: 'SPDR S&P 500 ETF',
@@ -31,10 +34,45 @@ const STOCK_NAMES: Record<string, string> = {
   GME: 'GameStop Corp.',
   COIN: 'Coinbase Global',
   PLTR: 'Palantir Technologies',
-  SOFI: 'SoFi Technologies',
-  NIO: 'NIO Inc.',
-  RIVN: 'Rivian Automotive',
-  F: 'Ford Motor Company',
+};
+
+const CRYPTO_NAMES: Record<string, string> = {
+  'BTC/USD': 'Bitcoin',
+  'ETH/USD': 'Ethereum',
+  'SOL/USD': 'Solana',
+  'DOGE/USD': 'Dogecoin',
+  'AVAX/USD': 'Avalanche',
+  'LINK/USD': 'Chainlink',
+  'UNI/USD': 'Uniswap',
+  'AAVE/USD': 'Aave',
+  'LTC/USD': 'Litecoin',
+  'XRP/USD': 'Ripple',
+  'ADA/USD': 'Cardano',
+  'DOT/USD': 'Polkadot',
+  'SHIB/USD': 'Shiba Inu',
+  'MATIC/USD': 'Polygon',
+};
+
+// Crypto keywords to symbol mapping
+const CRYPTO_KEYWORDS: Record<string, string> = {
+  'bitcoin': 'BTC/USD',
+  'btc': 'BTC/USD',
+  'ethereum': 'ETH/USD',
+  'eth': 'ETH/USD',
+  'solana': 'SOL/USD',
+  'sol': 'SOL/USD',
+  'dogecoin': 'DOGE/USD',
+  'doge': 'DOGE/USD',
+  'avalanche': 'AVAX/USD',
+  'avax': 'AVAX/USD',
+  'chainlink': 'LINK/USD',
+  'link': 'LINK/USD',
+};
+
+const isCryptoSymbol = (symbol: string): boolean => {
+  return symbol.includes('/') || Object.keys(CRYPTO_NAMES).some(
+    crypto => crypto.replace('/USD', '') === symbol.toUpperCase()
+  );
 };
 
 export const WatchlistSearch = ({ onAddSymbol, existingSymbols }: WatchlistSearchProps) => {
@@ -53,11 +91,13 @@ export const WatchlistSearch = ({ onAddSymbol, existingSymbols }: WatchlistSearc
 
       if (!error && data?.data?.[symbol]) {
         const md = data.data[symbol];
+        const isCrypto = isCryptoSymbol(symbol);
         return {
           symbol,
-          name: STOCK_NAMES[symbol] || symbol,
+          name: isCrypto ? (CRYPTO_NAMES[symbol] || symbol.replace('/USD', '')) : (STOCK_NAMES[symbol] || symbol),
           price: md.lastPrice || 0,
-          changePercent: md.changePercent || 0
+          changePercent: md.changePercent || 0,
+          assetType: isCrypto ? 'crypto' : 'stock',
         };
       }
       return null;
@@ -71,29 +111,47 @@ export const WatchlistSearch = ({ onAddSymbol, existingSymbols }: WatchlistSearc
       // Show suggestions excluding already-added symbols
       const suggestions = POPULAR_SYMBOLS
         .filter(s => !existingSymbols.includes(s))
-        .slice(0, 5)
+        .slice(0, 6)
         .map(s => ({
           symbol: s,
-          name: STOCK_NAMES[s] || s,
+          name: CRYPTO_NAMES[s] || STOCK_NAMES[s] || s,
           price: 0,
-          changePercent: 0
+          changePercent: 0,
+          assetType: (isCryptoSymbol(s) ? 'crypto' : 'stock') as 'stock' | 'crypto',
         }));
       setResults(suggestions);
       return;
     }
 
     setIsLoading(true);
+    const lower = searchQuery.toLowerCase();
     const upper = searchQuery.toUpperCase();
     
-    const matching = POPULAR_SYMBOLS.filter(s => 
-      s.includes(upper) || (STOCK_NAMES[s]?.toUpperCase().includes(upper))
-    ).filter(s => !existingSymbols.includes(s));
+    // Check for crypto keywords first
+    const cryptoMatch = CRYPTO_KEYWORDS[lower];
+    
+    // Find matching symbols
+    const matching: string[] = [];
+    
+    // Add crypto keyword match
+    if (cryptoMatch && !existingSymbols.includes(cryptoMatch)) {
+      matching.push(cryptoMatch);
+    }
+    
+    // Add matching from popular symbols
+    POPULAR_SYMBOLS.forEach(s => {
+      const name = CRYPTO_NAMES[s] || STOCK_NAMES[s] || '';
+      if ((s.includes(upper) || name.toLowerCase().includes(lower)) && !existingSymbols.includes(s) && !matching.includes(s)) {
+        matching.push(s);
+      }
+    });
 
-    if (!matching.includes(upper) && upper.length <= 5 && !existingSymbols.includes(upper)) {
-      matching.unshift(upper);
+    // If query looks like a stock symbol and not in list, add it
+    if (!matching.includes(upper) && upper.length <= 5 && /^[A-Z]{1,5}$/.test(upper) && !existingSymbols.includes(upper) && !isCryptoSymbol(upper)) {
+      matching.push(upper);
     }
 
-    const pricePromises = matching.slice(0, 4).map(fetchPrice);
+    const pricePromises = matching.slice(0, 5).map(fetchPrice);
     const pricesData = await Promise.all(pricePromises);
 
     setResults(pricesData.filter((r): r is SearchResult => r !== null && r.price > 0));
@@ -136,12 +194,12 @@ export const WatchlistSearch = ({ onAddSymbol, existingSymbols }: WatchlistSearc
         <input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value.toUpperCase())}
+          onChange={(e) => setQuery(e.target.value)}
           onFocus={() => {
             setIsOpen(true);
             if (!query) handleSearch('');
           }}
-          placeholder="Add symbol..."
+          placeholder="Add stock or crypto..."
           className="w-full bg-secondary/60 border border-border/40 rounded-xl pl-10 pr-10 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
         />
         {query && (
@@ -172,12 +230,27 @@ export const WatchlistSearch = ({ onAddSymbol, existingSymbols }: WatchlistSearc
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold",
-                      result.changePercent >= 0 ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
+                      result.assetType === 'crypto' 
+                        ? "bg-orange-500/15 text-orange-500"
+                        : result.changePercent >= 0 
+                          ? "bg-success/15 text-success" 
+                          : "bg-destructive/15 text-destructive"
                     )}>
-                      {result.symbol.slice(0, 2)}
+                      {result.assetType === 'crypto' ? (
+                        <Bitcoin className="h-4 w-4" />
+                      ) : (
+                        result.symbol.slice(0, 2)
+                      )}
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">{result.symbol}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm">{result.symbol}</p>
+                        {result.assetType === 'crypto' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-500 font-medium">
+                            CRYPTO
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground truncate max-w-[120px]">
                         {result.name}
                       </p>
@@ -209,7 +282,7 @@ export const WatchlistSearch = ({ onAddSymbol, existingSymbols }: WatchlistSearc
             </div>
           ) : (
             <div className="p-4 text-center text-muted-foreground text-sm">
-              Enter a symbol to search
+              Enter a symbol or name to search
             </div>
           )}
         </div>

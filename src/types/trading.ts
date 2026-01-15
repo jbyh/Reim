@@ -1,3 +1,5 @@
+export type AssetType = 'stock' | 'crypto';
+
 export interface Stock {
   symbol: string;
   name: string;
@@ -8,6 +10,7 @@ export interface Stock {
   askPrice?: number;
   bidSize?: number;
   askSize?: number;
+  assetType?: AssetType;
 }
 
 export interface Position {

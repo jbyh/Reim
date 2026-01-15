@@ -6,9 +6,52 @@ const corsHeaders = {
 };
 
 const ALPACA_DATA_URL = 'https://data.alpaca.markets/v2';
+const ALPACA_CRYPTO_URL = 'https://data.alpaca.markets/v1beta3/crypto/us';
+
+// Crypto keyword to symbol mapping
+const CRYPTO_KEYWORDS: Record<string, string> = {
+  'bitcoin': 'BTC/USD',
+  'btc': 'BTC/USD',
+  'ethereum': 'ETH/USD',
+  'eth': 'ETH/USD',
+  'solana': 'SOL/USD',
+  'sol': 'SOL/USD',
+  'dogecoin': 'DOGE/USD',
+  'doge': 'DOGE/USD',
+  'avalanche': 'AVAX/USD',
+  'avax': 'AVAX/USD',
+  'chainlink': 'LINK/USD',
+  'link': 'LINK/USD',
+  'uniswap': 'UNI/USD',
+  'uni': 'UNI/USD',
+  'aave': 'AAVE/USD',
+  'litecoin': 'LTC/USD',
+  'ltc': 'LTC/USD',
+  'ripple': 'XRP/USD',
+  'xrp': 'XRP/USD',
+  'cardano': 'ADA/USD',
+  'ada': 'ADA/USD',
+  'polkadot': 'DOT/USD',
+  'dot': 'DOT/USD',
+  'shiba': 'SHIB/USD',
+  'shib': 'SHIB/USD',
+  'polygon': 'MATIC/USD',
+  'matic': 'MATIC/USD',
+};
+
+const isCryptoSymbol = (symbol: string): boolean => {
+  const upper = symbol.toUpperCase();
+  return upper.includes('/USD') || Object.values(CRYPTO_KEYWORDS).some(s => s.replace('/USD', '') === upper);
+};
 
 const SYSTEM_PROMPT = `You are Trai — an elite AI trading copilot for TrAide (premium).
 Tone: concise, confident, and practical. No fluff.
+
+You can trade BOTH stocks AND cryptocurrencies:
+- Stocks: AAPL, TSLA, NVDA, SPY, QQQ, etc.
+- Crypto: BTC/USD, ETH/USD, SOL/USD, DOGE/USD, etc.
+
+Crypto trades 24/7 - no market hours restrictions. Use same order format for both.
 
 You have TWO sources of market data:
 1) LIVE watchlist prices included in the context
@@ -17,7 +60,7 @@ You have TWO sources of market data:
 When you propose a trade, output EXACTLY ONE JSON order_intent block (below) and keep any additional text to 1–3 short bullets.
 Do NOT restate the full ticket in prose — the UI will show the ticket separately.
 
-Order format:
+Order format (works for both stocks and crypto):
 \`\`\`json
 {
   "type": "order_intent",
@@ -34,11 +77,14 @@ Order format:
 }
 \`\`\`
 
+For crypto, use the full symbol format (e.g., "BTC/USD", "ETH/USD").
+
 Rules:
 - Use actual prices from context/quotes.
 - limitPrice near current ask; stopLoss 5–8% below; takeProfit 10–15% above.
 - Max risk per trade: 2% of equity.
-- Use 💡 for insights, ⚠️ for risks, 📊 for data.`;
+- For crypto: no bracket orders (stop loss/take profit) - just use market or limit orders.
+- Use 💡 for insights, ⚠️ for risks, 📊 for data, ₿ for crypto.`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -59,48 +105,101 @@ serve(async (req) => {
 
     // Extract any symbols mentioned in the last user message that we should fetch quotes for
     const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+    const lowerMessage = lastUserMessage.toLowerCase();
+    
+    // Extract stock symbols (uppercase 2-5 letter words)
     const symbolMatches = lastUserMessage.toUpperCase().match(/\b[A-Z]{1,5}\b/g) || [];
     const knownSymbols = Object.keys(portfolioContext?.watchlistPrices || {});
-  const newSymbols = symbolMatches.filter((s: string) => 
-    !knownSymbols.includes(s) && 
-    s.length >= 2 && 
-    s.length <= 5 &&
-    !['THE', 'AND', 'FOR', 'BUY', 'SELL', 'HOW', 'WHAT', 'WHY', 'NOW', 'DAY', 'TODAY', 'WEEK', 'YES', 'NOT', 'ARE', 'YOU'].includes(s)
-  );
+    
+    // Filter out common words
+    const commonWords = ['THE', 'AND', 'FOR', 'BUY', 'SELL', 'HOW', 'WHAT', 'WHY', 'NOW', 'DAY', 'TODAY', 'WEEK', 'YES', 'NOT', 'ARE', 'YOU', 'CAN', 'GET', 'PUT', 'CALL', 'LIKE', 'WANT', 'NEED', 'HELP', 'THINK', 'ABOUT', 'WITH', 'FROM', 'HAVE', 'THIS', 'THAT', 'WILL', 'WOULD', 'SHOULD', 'COULD', 'JUST', 'MORE', 'SOME', 'THAN', 'THEN', 'WHEN', 'WHERE', 'WHICH', 'WHILE', 'INTO', 'ONLY', 'ALSO', 'BACK', 'GOOD', 'MAKE', 'TAKE', 'COME', 'KNOW', 'LOOK'];
+    
+    const newStockSymbols = symbolMatches.filter((s: string) => 
+      !knownSymbols.includes(s) && 
+      s.length >= 2 && 
+      s.length <= 5 &&
+      !commonWords.includes(s) &&
+      !isCryptoSymbol(s)
+    );
+
+    // Detect crypto keywords in the message
+    const cryptoSymbols: string[] = [];
+    for (const [keyword, symbol] of Object.entries(CRYPTO_KEYWORDS)) {
+      if (lowerMessage.includes(keyword) && !knownSymbols.includes(symbol)) {
+        cryptoSymbols.push(symbol);
+      }
+    }
 
     // Fetch additional quotes for mentioned symbols
     let additionalQuotes: Record<string, any> = {};
-    if (newSymbols.length > 0 && ALPACA_API_KEY && ALPACA_API_SECRET) {
-      try {
-        const symbolsParam = [...new Set(newSymbols)].slice(0, 5).join(',');
-        const alpacaHeaders = {
-          'APCA-API-KEY-ID': ALPACA_API_KEY,
-          'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
-          'Accept': 'application/json',
-        };
+    
+    if (ALPACA_API_KEY && ALPACA_API_SECRET) {
+      const alpacaHeaders = {
+        'APCA-API-KEY-ID': ALPACA_API_KEY,
+        'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
+        'Accept': 'application/json',
+      };
 
-        const [tradesRes, quotesRes] = await Promise.all([
-          fetch(`${ALPACA_DATA_URL}/stocks/trades/latest?symbols=${symbolsParam}`, { headers: alpacaHeaders }),
-          fetch(`${ALPACA_DATA_URL}/stocks/quotes/latest?symbols=${symbolsParam}`, { headers: alpacaHeaders })
-        ]);
+      // Fetch stock quotes
+      if (newStockSymbols.length > 0) {
+        try {
+          const symbolsParam = [...new Set(newStockSymbols)].slice(0, 5).join(',');
 
-        if (tradesRes.ok && quotesRes.ok) {
-          const [tradesData, quotesData] = await Promise.all([tradesRes.json(), quotesRes.json()]);
-          
-          for (const sym of newSymbols) {
-            const trade = tradesData.trades?.[sym];
-            const quote = quotesData.quotes?.[sym];
-            if (trade || quote) {
-              additionalQuotes[sym] = {
-                price: trade?.p || quote?.ap || 0,
-                bidPrice: quote?.bp || 0,
-                askPrice: quote?.ap || 0,
-              };
+          const [tradesRes, quotesRes] = await Promise.all([
+            fetch(`${ALPACA_DATA_URL}/stocks/trades/latest?symbols=${symbolsParam}`, { headers: alpacaHeaders }),
+            fetch(`${ALPACA_DATA_URL}/stocks/quotes/latest?symbols=${symbolsParam}`, { headers: alpacaHeaders })
+          ]);
+
+          if (tradesRes.ok && quotesRes.ok) {
+            const [tradesData, quotesData] = await Promise.all([tradesRes.json(), quotesRes.json()]);
+            
+            for (const sym of newStockSymbols) {
+              const trade = tradesData.trades?.[sym];
+              const quote = quotesData.quotes?.[sym];
+              if (trade || quote) {
+                additionalQuotes[sym] = {
+                  price: trade?.p || quote?.ap || 0,
+                  bidPrice: quote?.bp || 0,
+                  askPrice: quote?.ap || 0,
+                  assetType: 'stock',
+                };
+              }
             }
           }
+        } catch (e) {
+          console.log('Failed to fetch stock quotes:', e);
         }
-      } catch (e) {
-        console.log('Failed to fetch additional quotes:', e);
+      }
+
+      // Fetch crypto quotes
+      if (cryptoSymbols.length > 0) {
+        try {
+          const cryptoSymbolsParam = [...new Set(cryptoSymbols)].slice(0, 5).join(',');
+
+          const [tradesRes, quotesRes] = await Promise.all([
+            fetch(`${ALPACA_CRYPTO_URL}/latest/trades?symbols=${cryptoSymbolsParam}`, { headers: alpacaHeaders }),
+            fetch(`${ALPACA_CRYPTO_URL}/latest/quotes?symbols=${cryptoSymbolsParam}`, { headers: alpacaHeaders })
+          ]);
+
+          if (tradesRes.ok && quotesRes.ok) {
+            const [tradesData, quotesData] = await Promise.all([tradesRes.json(), quotesRes.json()]);
+            
+            for (const sym of cryptoSymbols) {
+              const trade = tradesData.trades?.[sym];
+              const quote = quotesData.quotes?.[sym];
+              if (trade || quote) {
+                additionalQuotes[sym] = {
+                  price: trade?.p || quote?.ap || 0,
+                  bidPrice: quote?.bp || 0,
+                  askPrice: quote?.ap || 0,
+                  assetType: 'crypto',
+                };
+              }
+            }
+          }
+        } catch (e) {
+          console.log('Failed to fetch crypto quotes:', e);
+        }
       }
     }
 
@@ -120,7 +219,8 @@ ${portfolioContext.positions?.map((p: any) => `- ${p.symbol}: ${p.qty} shares @ 
       if (portfolioContext.watchlistPrices) {
         contextualPrompt += `\n\n=== LIVE MARKET PRICES (FROM WATCHLIST) ===`;
         Object.entries(portfolioContext.watchlistPrices).forEach(([symbol, data]: [string, any]) => {
-          contextualPrompt += `\n${symbol}: $${data.price} (${data.change >= 0 ? '+' : ''}${data.changePercent}%) | Bid: $${data.bidPrice || 'N/A'} | Ask: $${data.askPrice || 'N/A'}`;
+          const assetIndicator = data.assetType === 'crypto' ? '₿' : '📈';
+          contextualPrompt += `\n${assetIndicator} ${symbol}: $${data.price} (${data.change >= 0 ? '+' : ''}${data.changePercent}%) | Bid: $${data.bidPrice || 'N/A'} | Ask: $${data.askPrice || 'N/A'}`;
         });
       }
     }
@@ -129,7 +229,8 @@ ${portfolioContext.positions?.map((p: any) => `- ${p.symbol}: ${p.qty} shares @ 
     if (Object.keys(additionalQuotes).length > 0) {
       contextualPrompt += `\n\n=== REAL-TIME QUOTES (JUST FETCHED) ===`;
       Object.entries(additionalQuotes).forEach(([symbol, data]: [string, any]) => {
-        contextualPrompt += `\n${symbol}: $${data.price?.toFixed(2)} | Bid: $${data.bidPrice?.toFixed(2) || 'N/A'} | Ask: $${data.askPrice?.toFixed(2) || 'N/A'}`;
+        const assetIndicator = data.assetType === 'crypto' ? '₿' : '📈';
+        contextualPrompt += `\n${assetIndicator} ${symbol}: $${data.price?.toFixed(2)} | Bid: $${data.bidPrice?.toFixed(2) || 'N/A'} | Ask: $${data.askPrice?.toFixed(2) || 'N/A'}`;
       });
     }
 

@@ -1,11 +1,10 @@
 import { Stock } from '@/types/trading';
-import { TrendingUp, TrendingDown, Eye, ChevronRight, Sparkles, Search, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Eye, ChevronRight, Sparkles, Search, X, Bitcoin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { MiniChart } from './widgets/MiniChart';
 import { useState } from 'react';
 import { WatchlistSearch } from './WatchlistSearch';
-
 interface WatchlistProps {
   stocks: Stock[];
   onAddSymbol?: (symbol: string) => void;
@@ -64,10 +63,11 @@ export const Watchlist = ({ stocks, onAddSymbol, onRemoveSymbol }: WatchlistProp
       <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-3">
         {filteredStocks.map((stock) => {
           const isPositive = stock.change >= 0;
+          const isCrypto = stock.assetType === 'crypto';
           return (
             <div
               key={stock.symbol}
-              onClick={() => navigate(`/asset/${stock.symbol}`)}
+              onClick={() => navigate(`/asset/${encodeURIComponent(stock.symbol)}`)}
               className={cn(
                 'watchlist-item group',
                 isPositive ? 'gain' : 'loss'
@@ -77,13 +77,20 @@ export const Watchlist = ({ stocks, onAddSymbol, onRemoveSymbol }: WatchlistProp
                 <div className="flex items-center gap-4">
                   <div className={cn(
                     "w-12 h-12 rounded-xl flex items-center justify-center text-sm font-bold",
-                    isPositive ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
+                    isCrypto 
+                      ? "bg-orange-500/15 text-orange-500"
+                      : isPositive ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
                   )}>
-                    {stock.symbol.slice(0, 2)}
+                    {isCrypto ? <Bitcoin className="h-5 w-5" /> : stock.symbol.slice(0, 2)}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="font-bold text-lg text-foreground">{stock.symbol}</span>
+                      {isCrypto && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-500 font-medium">
+                          CRYPTO
+                        </span>
+                      )}
                       <span className={cn(
                         "h-2 w-2 rounded-full",
                         isPositive ? "bg-success" : "bg-destructive"

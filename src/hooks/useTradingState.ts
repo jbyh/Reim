@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Stock, Position, Order, ChatMessage, Portfolio, OrderIntent, Activity } from '@/types/trading';
+import { Stock, Position, Order, ChatMessage, Portfolio, OrderIntent, Activity, AssetType } from '@/types/trading';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -18,12 +18,45 @@ const STOCK_NAMES: Record<string, string> = {
   'AMD': 'AMD Inc',
 };
 
+const CRYPTO_NAMES: Record<string, string> = {
+  'BTC/USD': 'Bitcoin',
+  'ETH/USD': 'Ethereum',
+  'SOL/USD': 'Solana',
+  'DOGE/USD': 'Dogecoin',
+  'AVAX/USD': 'Avalanche',
+  'LINK/USD': 'Chainlink',
+  'UNI/USD': 'Uniswap',
+  'AAVE/USD': 'Aave',
+  'LTC/USD': 'Litecoin',
+  'BCH/USD': 'Bitcoin Cash',
+  'XRP/USD': 'Ripple',
+  'ADA/USD': 'Cardano',
+  'DOT/USD': 'Polkadot',
+  'SHIB/USD': 'Shiba Inu',
+  'MATIC/USD': 'Polygon',
+};
+
+// Helper to detect crypto symbols
+const isCryptoSymbol = (symbol: string): boolean => {
+  const upper = symbol.toUpperCase();
+  return upper.includes('/USD') || Object.keys(CRYPTO_NAMES).some(
+    crypto => crypto.replace('/USD', '') === upper
+  );
+};
+
+// Normalize crypto symbol to Alpaca format
+const normalizeCryptoSymbol = (symbol: string): string => {
+  if (symbol.includes('/')) return symbol.toUpperCase();
+  return `${symbol.toUpperCase()}/USD`;
+};
+
 const INITIAL_WATCHLIST: Stock[] = WATCHLIST_SYMBOLS.map(symbol => ({
   symbol,
   name: STOCK_NAMES[symbol] || symbol,
   price: 0,
   change: 0,
   changePercent: 0,
+  assetType: 'stock' as AssetType,
 }));
 
 const INITIAL_PORTFOLIO: Portfolio = {
@@ -49,7 +82,7 @@ export const useTradingState = () => {
     {
       id: generateId(),
       role: 'assistant',
-      content: "Hey! I'm Trai, your AI trading companion. I have access to real-time market data for any stock - just ask me about any symbol. I can help you analyze markets, build smart orders with limit prices and stop losses, and explore options strategies. What's on your mind?",
+      content: "Hey! I'm Trai, your AI trading companion. I can help you trade both stocks AND crypto — just ask about AAPL, TSLA, Bitcoin, Ethereum, or any other asset. I'll fetch real-time prices and help you build smart orders. What's on your mind?",
       timestamp: new Date(),
     },
   ]);
@@ -144,8 +177,13 @@ export const useTradingState = () => {
   // Fetch live market data from Alpaca
   const fetchMarketData = useCallback(async () => {
     try {
+      // Get all symbols from watchlist
+      const allSymbols = watchlist.map(s => s.symbol);
+      
+      if (allSymbols.length === 0) return;
+
       const { data, error } = await supabase.functions.invoke('market-data', {
-        body: { symbols: WATCHLIST_SYMBOLS },
+        body: { symbols: allSymbols },
       });
 
       if (error) {
@@ -161,13 +199,14 @@ export const useTradingState = () => {
 
             return {
               ...stock,
-              price: Number(marketData.lastPrice.toFixed(2)),
-              change: Number(marketData.change.toFixed(2)),
-              changePercent: Number(marketData.changePercent.toFixed(2)),
+              price: Number(marketData.lastPrice?.toFixed(2) || 0),
+              change: Number(marketData.change?.toFixed(2) || 0),
+              changePercent: Number(marketData.changePercent?.toFixed(2) || 0),
               bidPrice: marketData.bidPrice,
               askPrice: marketData.askPrice,
               bidSize: marketData.bidSize,
               askSize: marketData.askSize,
+              assetType: marketData.assetType || stock.assetType,
             };
           })
         );
@@ -175,7 +214,7 @@ export const useTradingState = () => {
     } catch (err) {
       console.error('Failed to fetch market data:', err);
     }
-  }, []);
+  }, [watchlist]);
 
   // Refetch all portfolio data (for use after order submission)
   const refetchAllData = useCallback(async () => {
@@ -234,8 +273,13 @@ export const useTradingState = () => {
       const parsed = JSON.parse(jsonMatch[1]);
       if (parsed.type !== 'order_intent') return null;
 
-      const stock = watchlist.find((s) => s.symbol === parsed.symbol);
-      if (!stock) return null;
+      // For crypto, we might not have it in watchlist yet, so just validate the symbol format
+      const symbol = parsed.symbol;
+      const isInWatchlist = watchlist.find((s) => s.symbol === symbol);
+      const isCrypto = isCryptoSymbol(symbol);
+      
+      // Allow the order if it's in watchlist OR it's a valid crypto symbol
+      if (!isInWatchlist && !isCrypto) return null;
 
       return {
         symbol: parsed.symbol,
@@ -243,8 +287,8 @@ export const useTradingState = () => {
         side: parsed.side,
         type: parsed.orderType || 'market',
         limitPrice: parsed.suggestions?.limitPrice,
-        stopLoss: parsed.suggestions?.stopLoss,
-        takeProfit: parsed.suggestions?.takeProfit,
+        stopLoss: isCrypto ? undefined : parsed.suggestions?.stopLoss, // No bracket orders for crypto
+        takeProfit: isCrypto ? undefined : parsed.suggestions?.takeProfit,
       };
     } catch {
       return null;
@@ -295,6 +339,7 @@ export const useTradingState = () => {
                     changePercent: stock.changePercent,
                     bidPrice: stock.bidPrice,
                     askPrice: stock.askPrice,
+                    assetType: stock.assetType,
                   };
                 }
                 return acc;
@@ -401,6 +446,7 @@ export const useTradingState = () => {
     const submittingOrder = pendingOrder;
     const stock = watchlist.find((s) => s.symbol === submittingOrder.symbol);
     const currentPrice = stock?.price || submittingOrder.limitPrice || 0;
+    const isCrypto = isCryptoSymbol(submittingOrder.symbol);
 
     setOrderStatus('submitting');
 
@@ -414,8 +460,9 @@ export const useTradingState = () => {
           side: submittingOrder.side,
           type: submittingOrder.type,
           limitPrice: submittingOrder.limitPrice,
-          stopLoss: submittingOrder.stopLoss,
-          takeProfit: submittingOrder.takeProfit,
+          // Only include bracket order params for stocks
+          stopLoss: isCrypto ? undefined : submittingOrder.stopLoss,
+          takeProfit: isCrypto ? undefined : submittingOrder.takeProfit,
         },
       });
 
@@ -440,6 +487,7 @@ export const useTradingState = () => {
       setOrderStatus('confirmed');
 
       // Add confirmation message
+      const assetLabel = isCrypto ? 'crypto' : 'shares';
       const confirmationMessage: ChatMessage = {
         id: generateId(),
         role: 'assistant',
@@ -499,45 +547,57 @@ export const useTradingState = () => {
 
   // Add a symbol to watchlist
   const addToWatchlist = useCallback(async (symbol: string) => {
-    const upperSymbol = symbol.toUpperCase();
+    // Normalize and detect asset type
+    const isCrypto = isCryptoSymbol(symbol);
+    const normalizedSymbol = isCrypto ? normalizeCryptoSymbol(symbol) : symbol.toUpperCase();
     
     // Check if already in watchlist
-    if (watchlist.some(s => s.symbol === upperSymbol)) {
-      toast.info(`${upperSymbol} is already in your watchlist`);
+    if (watchlist.some(s => s.symbol === normalizedSymbol)) {
+      toast.info(`${normalizedSymbol} is already in your watchlist`);
       return;
     }
 
     // Fetch the price for the new symbol
     try {
       const { data, error } = await supabase.functions.invoke('market-data', {
-        body: { symbols: [upperSymbol] }
+        body: { symbols: [normalizedSymbol] }
       });
 
-      if (!error && data?.data?.[upperSymbol]) {
-        const md = data.data[upperSymbol];
+      if (!error && data?.data?.[normalizedSymbol]) {
+        const md = data.data[normalizedSymbol];
+        const name = isCrypto 
+          ? CRYPTO_NAMES[normalizedSymbol] || normalizedSymbol.replace('/USD', '')
+          : STOCK_NAMES[normalizedSymbol] || normalizedSymbol;
+          
         setWatchlist(prev => [...prev, {
-          symbol: upperSymbol,
-          name: STOCK_NAMES[upperSymbol] || upperSymbol,
+          symbol: normalizedSymbol,
+          name,
           price: Number(md.lastPrice?.toFixed(2) || 0),
           change: Number(md.change?.toFixed(2) || 0),
           changePercent: Number(md.changePercent?.toFixed(2) || 0),
           bidPrice: md.bidPrice,
           askPrice: md.askPrice,
+          assetType: isCrypto ? 'crypto' : 'stock',
         }]);
-        toast.success(`Added ${upperSymbol} to watchlist`);
+        toast.success(`Added ${normalizedSymbol} to watchlist`);
       } else {
         // Add with zero price, will be updated on next refresh
+        const name = isCrypto 
+          ? CRYPTO_NAMES[normalizedSymbol] || normalizedSymbol.replace('/USD', '')
+          : STOCK_NAMES[normalizedSymbol] || normalizedSymbol;
+          
         setWatchlist(prev => [...prev, {
-          symbol: upperSymbol,
-          name: STOCK_NAMES[upperSymbol] || upperSymbol,
+          symbol: normalizedSymbol,
+          name,
           price: 0,
           change: 0,
           changePercent: 0,
+          assetType: isCrypto ? 'crypto' : 'stock',
         }]);
-        toast.success(`Added ${upperSymbol} to watchlist`);
+        toast.success(`Added ${normalizedSymbol} to watchlist`);
       }
     } catch {
-      toast.error(`Failed to add ${upperSymbol}`);
+      toast.error(`Failed to add ${normalizedSymbol}`);
     }
   }, [watchlist]);
 

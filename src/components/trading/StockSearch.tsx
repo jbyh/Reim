@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, TrendingUp, TrendingDown, ArrowRight, Sparkles, X } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, ArrowRight, Sparkles, X, Bitcoin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,21 +10,58 @@ interface SearchResult {
   price?: number;
   change?: number;
   changePercent?: number;
+  assetType?: 'stock' | 'crypto';
 }
 
 // Popular stocks for quick access
 const POPULAR_STOCKS = [
-  { symbol: 'AAPL', name: 'Apple Inc.' },
-  { symbol: 'MSFT', name: 'Microsoft Corporation' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.' },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.' },
-  { symbol: 'NVDA', name: 'NVIDIA Corporation' },
-  { symbol: 'TSLA', name: 'Tesla Inc.' },
-  { symbol: 'META', name: 'Meta Platforms Inc.' },
-  { symbol: 'SPY', name: 'SPDR S&P 500 ETF' },
-  { symbol: 'QQQ', name: 'Invesco QQQ Trust' },
-  { symbol: 'AMD', name: 'Advanced Micro Devices' },
+  { symbol: 'AAPL', name: 'Apple Inc.', assetType: 'stock' as const },
+  { symbol: 'MSFT', name: 'Microsoft Corporation', assetType: 'stock' as const },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', assetType: 'stock' as const },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.', assetType: 'stock' as const },
+  { symbol: 'NVDA', name: 'NVIDIA Corporation', assetType: 'stock' as const },
+  { symbol: 'TSLA', name: 'Tesla Inc.', assetType: 'stock' as const },
 ];
+
+const POPULAR_CRYPTO = [
+  { symbol: 'BTC/USD', name: 'Bitcoin', assetType: 'crypto' as const },
+  { symbol: 'ETH/USD', name: 'Ethereum', assetType: 'crypto' as const },
+  { symbol: 'SOL/USD', name: 'Solana', assetType: 'crypto' as const },
+  { symbol: 'DOGE/USD', name: 'Dogecoin', assetType: 'crypto' as const },
+];
+
+const POPULAR_ASSETS = [...POPULAR_STOCKS, ...POPULAR_CRYPTO];
+
+// Crypto keywords to symbol mapping
+const CRYPTO_KEYWORDS: Record<string, string> = {
+  'bitcoin': 'BTC/USD',
+  'btc': 'BTC/USD',
+  'ethereum': 'ETH/USD',
+  'eth': 'ETH/USD',
+  'solana': 'SOL/USD',
+  'sol': 'SOL/USD',
+  'dogecoin': 'DOGE/USD',
+  'doge': 'DOGE/USD',
+  'avalanche': 'AVAX/USD',
+  'avax': 'AVAX/USD',
+  'chainlink': 'LINK/USD',
+  'link': 'LINK/USD',
+};
+
+const CRYPTO_NAMES: Record<string, string> = {
+  'BTC/USD': 'Bitcoin',
+  'ETH/USD': 'Ethereum',
+  'SOL/USD': 'Solana',
+  'DOGE/USD': 'Dogecoin',
+  'AVAX/USD': 'Avalanche',
+  'LINK/USD': 'Chainlink',
+};
+
+const isCryptoSymbol = (symbol: string): boolean => {
+  return symbol.includes('/') || Object.keys(CRYPTO_NAMES).some(
+    crypto => crypto.replace('/USD', '') === symbol.toUpperCase()
+  );
+};
 
 interface StockSearchProps {
   onClose?: () => void;
@@ -32,7 +69,7 @@ interface StockSearchProps {
   placeholder?: string;
 }
 
-export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search any stock or ETF..." }: StockSearchProps) => {
+export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search stocks or crypto..." }: StockSearchProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -58,8 +95,10 @@ export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const searchStocks = async (searchQuery: string) => {
+  const searchAssets = async (searchQuery: string) => {
     const upperQuery = searchQuery.toUpperCase().trim();
+    const lowerQuery = searchQuery.toLowerCase().trim();
+    
     if (!upperQuery) {
       setResults([]);
       return;
@@ -67,17 +106,29 @@ export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search
 
     setIsLoading(true);
     
-    // Filter popular stocks first
-    const filtered = POPULAR_STOCKS.filter(
+    // Check for crypto keywords
+    const cryptoMatch = CRYPTO_KEYWORDS[lowerQuery];
+    
+    // Filter popular assets first
+    const filtered = POPULAR_ASSETS.filter(
       s => s.symbol.includes(upperQuery) || s.name.toUpperCase().includes(upperQuery)
     );
 
-    // If the query looks like a valid symbol not in our list, add it as a potential result
-    const isValidSymbol = /^[A-Z]{1,5}$/.test(upperQuery);
+    // Add crypto match if found and not already in list
+    if (cryptoMatch && !filtered.some(f => f.symbol === cryptoMatch)) {
+      filtered.unshift({ 
+        symbol: cryptoMatch, 
+        name: CRYPTO_NAMES[cryptoMatch] || cryptoMatch, 
+        assetType: 'crypto' 
+      });
+    }
+
+    // If the query looks like a valid stock symbol not in our list, add it as a potential result
+    const isValidStockSymbol = /^[A-Z]{1,5}$/.test(upperQuery);
     const existsInFiltered = filtered.some(s => s.symbol === upperQuery);
     
-    if (isValidSymbol && !existsInFiltered) {
-      filtered.unshift({ symbol: upperQuery, name: 'Search for ' + upperQuery });
+    if (isValidStockSymbol && !existsInFiltered && !isCryptoSymbol(upperQuery)) {
+      filtered.unshift({ symbol: upperQuery, name: 'Search for ' + upperQuery, assetType: 'stock' });
     }
 
     // Try to fetch live prices for the filtered results
@@ -88,13 +139,14 @@ export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search
       });
 
       if (!error && data?.data) {
-        const enrichedResults = filtered.slice(0, 6).map(stock => {
-          const marketData = data.data[stock.symbol];
+        const enrichedResults = filtered.slice(0, 6).map(asset => {
+          const marketData = data.data[asset.symbol];
           return {
-            ...stock,
+            ...asset,
             price: marketData?.lastPrice,
             change: marketData?.change,
             changePercent: marketData?.changePercent,
+            assetType: marketData?.assetType || asset.assetType,
           };
         });
         setResults(enrichedResults);
@@ -112,14 +164,14 @@ export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search
     const value = e.target.value;
     setQuery(value);
     setShowDropdown(true);
-    searchStocks(value);
+    searchAssets(value);
   };
 
   const handleSelect = (symbol: string) => {
     setShowDropdown(false);
     setQuery('');
     onClose?.();
-    navigate(`/asset/${symbol}`);
+    navigate(`/asset/${encodeURIComponent(symbol)}`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -173,6 +225,7 @@ export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search
             <div className="max-h-80 overflow-y-auto">
               {results.map((result) => {
                 const isPositive = (result.change ?? 0) >= 0;
+                const isCrypto = result.assetType === 'crypto';
                 return (
                   <button
                     key={result.symbol}
@@ -182,14 +235,27 @@ export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold",
-                        result.price 
-                          ? (isPositive ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive")
-                          : "bg-secondary text-muted-foreground"
+                        isCrypto
+                          ? "bg-orange-500/15 text-orange-500"
+                          : result.price 
+                            ? (isPositive ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive")
+                            : "bg-secondary text-muted-foreground"
                       )}>
-                        {result.symbol.slice(0, 2)}
+                        {isCrypto ? (
+                          <Bitcoin className="h-5 w-5" />
+                        ) : (
+                          result.symbol.slice(0, 2)
+                        )}
                       </div>
                       <div className="text-left">
-                        <p className="font-bold text-foreground">{result.symbol}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-foreground">{result.symbol}</p>
+                          {isCrypto && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-500 font-medium">
+                              CRYPTO
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground truncate max-w-[200px]">{result.name}</p>
                       </div>
                     </div>
@@ -226,21 +292,37 @@ export const StockSearch = ({ onClose, variant = 'inline', placeholder = "Search
             <div className="p-4">
               <div className="flex items-center gap-2 mb-3 text-sm text-muted-foreground">
                 <Sparkles className="h-4 w-4 text-primary" />
-                <span>Popular stocks</span>
+                <span>Popular assets</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {POPULAR_STOCKS.slice(0, 6).map((stock) => (
+                {POPULAR_ASSETS.slice(0, 8).map((asset) => (
                   <button
-                    key={stock.symbol}
-                    onClick={() => handleSelect(stock.symbol)}
+                    key={asset.symbol}
+                    onClick={() => handleSelect(asset.symbol)}
                     className="flex items-center gap-2 p-3 rounded-xl hover:bg-secondary/50 transition-colors text-left"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                      {stock.symbol.slice(0, 2)}
+                    <div className={cn(
+                      "w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold",
+                      asset.assetType === 'crypto'
+                        ? "bg-orange-500/10 text-orange-500"
+                        : "bg-primary/10 text-primary"
+                    )}>
+                      {asset.assetType === 'crypto' ? (
+                        <Bitcoin className="h-4 w-4" />
+                      ) : (
+                        asset.symbol.slice(0, 2)
+                      )}
                     </div>
                     <div>
-                      <p className="font-medium text-sm">{stock.symbol}</p>
-                      <p className="text-xs text-muted-foreground truncate max-w-[100px]">{stock.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-sm">{asset.symbol}</p>
+                        {asset.assetType === 'crypto' && (
+                          <span className="text-[8px] px-1 py-0.5 rounded bg-orange-500/20 text-orange-500 font-medium">
+                            ₿
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate max-w-[100px]">{asset.name}</p>
                     </div>
                   </button>
                 ))}
