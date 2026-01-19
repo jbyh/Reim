@@ -285,4 +285,39 @@
   .safe-area-inset-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+
+  /* Mobile-first responsive typography */
+  .text-price {
+    @apply text-2xl md:text-3xl lg:text-4xl font-mono font-bold;
+  }
+  
+  .text-price-lg {
+    @apply text-3xl md:text-4xl lg:text-5xl font-mono font-bold;
+  }
+  
+  .text-stat {
+    @apply text-lg md:text-xl lg:text-2xl font-mono font-bold;
+  }
+  
+  .text-stat-value {
+    @apply text-base md:text-lg font-mono font-bold;
+  }
+  
+  .text-stat-label {
+    @apply text-[10px] md:text-xs text-muted-foreground uppercase tracking-wide;
+  }
+  
+  /* Compact card utilities */
+  .card-compact {
+    @apply p-3 md:p-4 lg:p-5 rounded-xl md:rounded-2xl;
+  }
+  
+  .card-mobile {
+    @apply p-2.5 md:p-4 rounded-lg md:rounded-xl;
+  }
+
+  /* Touch-friendly targets */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
 }

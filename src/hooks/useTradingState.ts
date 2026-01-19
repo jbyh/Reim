@@ -89,6 +89,7 @@ export const useTradingState = () => {
   const [pendingOrder, setPendingOrder] = useState<OrderIntent | null>(null);
   const [orderStatus, setOrderStatus] = useState<'pending' | 'submitting' | 'confirmed' | 'failed' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [quickTradeEnabled, setQuickTradeEnabled] = useState(false);
   const conversationHistory = useRef<Array<{ role: string; content: string }>>([]);
 
   // Fetch account data from Alpaca
@@ -531,6 +532,71 @@ export const useTradingState = () => {
     }
   }, [pendingOrder, watchlist, refetchAllData]);
 
+  // Submit order directly (for TradeTicketDrawer and quick trade)
+  const submitOrder = useCallback(async (order: OrderIntent, skipConfirmation?: boolean) => {
+    if (skipConfirmation || quickTradeEnabled) {
+      // Execute immediately without setting pending
+      const stock = watchlist.find((s) => s.symbol === order.symbol);
+      const currentPrice = stock?.price || order.limitPrice || 0;
+      const isCrypto = isCryptoSymbol(order.symbol);
+
+      setOrderStatus('submitting');
+
+      try {
+        const { data, error } = await supabase.functions.invoke('market-data', {
+          body: {
+            action: 'submit_order',
+            orderSymbol: order.symbol,
+            qty: order.qty,
+            side: order.side,
+            type: order.type,
+            limitPrice: order.limitPrice,
+            stopLoss: isCrypto ? undefined : order.stopLoss,
+            takeProfit: isCrypto ? undefined : order.takeProfit,
+          },
+        });
+
+        if (error) throw new Error(error.message || 'Order submission failed');
+        if (!data?.success) throw new Error(data?.error || 'Order was not accepted');
+
+        const newOrder: Order = {
+          id: data.data?.id || generateId(),
+          ...order,
+          status: 'filled',
+          timestamp: new Date(),
+        };
+
+        setOrders((prev) => [...prev, newOrder]);
+        setOrderStatus('confirmed');
+
+        const confirmationMessage: ChatMessage = {
+          id: generateId(),
+          role: 'assistant',
+          content: `⚡ Quick trade executed: ${order.side.toUpperCase()} ${order.qty} ${order.symbol} @ ~$${currentPrice.toFixed(2)}`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, confirmationMessage]);
+        toast.success(`Order executed: ${order.side.toUpperCase()} ${order.qty} ${order.symbol}`);
+
+        setTimeout(async () => {
+          await refetchAllData();
+        }, 1500);
+
+        setTimeout(() => setOrderStatus(null), 4000);
+      } catch (err) {
+        console.error('Order submission error:', err);
+        const errorMessage = err instanceof Error ? err.message : 'Failed to submit order';
+        toast.error(errorMessage);
+        setOrderStatus('failed');
+        setTimeout(() => setOrderStatus(null), 5000);
+        throw err;
+      }
+    } else {
+      // Set as pending for confirmation
+      setPendingOrder(order);
+    }
+  }, [quickTradeEnabled, watchlist, refetchAllData]);
+
   // Cancel order
   const cancelOrder = useCallback(() => {
     if (!pendingOrder) return;
@@ -619,9 +685,12 @@ export const useTradingState = () => {
     isLoading,
     activities,
     isLoadingActivities,
+    quickTradeEnabled,
+    setQuickTradeEnabled,
     sendMessage,
     confirmOrder,
     cancelOrder,
+    submitOrder,
     fetchActivities,
     addToWatchlist,
     removeFromWatchlist,
