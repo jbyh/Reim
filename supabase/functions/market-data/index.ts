@@ -12,7 +12,11 @@ const ALPACA_CRYPTO_URL = 'https://data.alpaca.markets/v1beta3/crypto/us';
 
 // Simple in-memory cache to reduce API calls and prevent rate limiting
 const cache: Map<string, { data: any; timestamp: number }> = new Map();
-const CACHE_TTL_MS = 5000; // 5 second cache for market data
+const CACHE_TTL_MS = 15000; // 15 second cache for market data to prevent rate limiting
+
+// Track last request time to enforce minimum delay between API calls
+let lastApiCallTime = 0;
+const MIN_API_DELAY_MS = 2000; // Minimum 2 seconds between API calls
 
 const getCached = (key: string): any | null => {
   const cached = cache.get(key);
@@ -308,6 +312,14 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Rate limit protection - wait if needed to prevent 429 errors
+    const now = Date.now();
+    const timeSinceLastCall = now - lastApiCallTime;
+    if (timeSinceLastCall < MIN_API_DELAY_MS) {
+      await new Promise(resolve => setTimeout(resolve, MIN_API_DELAY_MS - timeSinceLastCall));
+    }
+    lastApiCallTime = Date.now();
 
     // Separate stocks and crypto
     const stockSymbols = symbols.filter(s => !isCryptoSymbol(s));

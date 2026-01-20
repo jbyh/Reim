@@ -48,6 +48,7 @@ interface TraiAssistantProps {
   onConfirmOrder: () => void;
   onCancelOrder: () => void;
   onNavigate: (tab: TabType, symbol?: string) => void;
+  isFullPage?: boolean; // New prop for dedicated page mode
 }
 
 export const TraiAssistant = ({
@@ -62,9 +63,11 @@ export const TraiAssistant = ({
   onSendMessage,
   onConfirmOrder,
   onCancelOrder,
-  onNavigate
+  onNavigate,
+  isFullPage = false
 }: TraiAssistantProps) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  // isExpanded: 'collapsed' | 'half' | 'full' - three states for mobile
+  const [expansionState, setExpansionState] = useState<'collapsed' | 'half' | 'full'>('collapsed');
   const [isMinimized, setIsMinimized] = useState(false);
   const [input, setInput] = useState('');
   const [showConfirmAnimation, setShowConfirmAnimation] = useState(false);
@@ -74,7 +77,6 @@ export const TraiAssistant = ({
 
   // Context-aware quick actions based on current page
   const quickActions = useMemo((): QuickAction[] => {
-    // If there's a pending order, prioritize execution controls.
     if (pendingOrder) {
       return [
         { label: 'Confirm & Execute', action: '__confirm_order__', icon: CheckCircle2, variant: 'success' },
@@ -139,12 +141,11 @@ export const TraiAssistant = ({
   };
 
   useEffect(() => {
-    if (isExpanded) {
+    if (expansionState !== 'collapsed' || isFullPage) {
       scrollToBottom();
     }
-  }, [messages, isExpanded]);
+  }, [messages, expansionState, isFullPage]);
 
-  // Show confirmation animation when order is confirmed
   useEffect(() => {
     if (orderStatus === 'confirmed') {
       setShowConfirmAnimation(true);
@@ -171,8 +172,18 @@ export const TraiAssistant = ({
     }
 
     onSendMessage(action);
-    if (!isExpanded) {
-      setIsExpanded(true);
+    if (expansionState === 'collapsed' && !isFullPage) {
+      setExpansionState('full');
+    }
+  };
+
+  const toggleExpansion = () => {
+    if (expansionState === 'collapsed') {
+      setExpansionState('full'); // Go straight to full on mobile
+    } else if (expansionState === 'half') {
+      setExpansionState('full');
+    } else {
+      setExpansionState('collapsed');
     }
   };
 
@@ -195,13 +206,13 @@ export const TraiAssistant = ({
     } else if (orderStatus === 'confirmed') {
       statusConfig = {
         icon: CheckCircle2,
-        text: 'Order Confirmed!',
+        text: 'Confirmed!',
         className: 'bg-success/20 text-success border-success/30'
       };
     } else if (orderStatus === 'failed') {
       statusConfig = {
         icon: AlertCircle,
-        text: 'Order Failed',
+        text: 'Failed',
         className: 'bg-destructive/20 text-destructive border-destructive/30'
       };
     }
@@ -210,35 +221,231 @@ export const TraiAssistant = ({
     
     return (
       <div className={cn(
-        "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border animate-in fade-in slide-in-from-top-2",
+        "inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium border animate-in fade-in",
         statusConfig.className
       )}>
-        <Icon className={cn("h-3.5 w-3.5", orderStatus === 'submitting' && "animate-spin")} />
+        <Icon className={cn("h-3 w-3", orderStatus === 'submitting' && "animate-spin")} />
         {statusConfig.text}
       </div>
     );
   };
 
+  // Confirmation toast
+  const ConfirmationToast = () => {
+    if (!showConfirmAnimation) return null;
+    return (
+      <div className="fixed top-4 right-4 z-[60] animate-in slide-in-from-top-4 fade-in duration-300">
+        <div className="flex items-center gap-2 px-3 py-2 bg-success/20 border border-success/30 rounded-lg shadow-lg backdrop-blur">
+          <CheckCircle2 className="h-4 w-4 text-success" />
+          <span className="text-xs font-medium text-success">Order Confirmed!</span>
+        </div>
+      </div>
+    );
+  };
+
+  // Chat content component - shared between overlay and full page
+  const ChatContent = ({ className = '' }: { className?: string }) => (
+    <div className={cn("flex flex-col h-full", className)}>
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4 space-y-3">
+        {messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-4">
+            <div className="w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
+              <Sparkles className="h-7 w-7 text-white" />
+            </div>
+            <h3 className="font-bold text-base text-foreground mb-2">Hey! I'm Trai</h3>
+            <p className="text-xs text-muted-foreground mb-4 max-w-[260px]">
+              Your AI trading companion. I can analyze markets, suggest trades, and help you make smarter decisions.
+            </p>
+            <div className="w-full space-y-2">
+              {quickActions.map((qa) => (
+                <button
+                  key={qa.label}
+                  onClick={() => handleQuickAction(qa.action)}
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left group"
+                >
+                  <div className="flex items-center gap-2">
+                    <qa.icon className={cn(
+                      "h-4 w-4",
+                      qa.variant === 'primary' && "text-primary",
+                      qa.variant === 'success' && "text-success",
+                      qa.variant === 'warning' && "text-warning"
+                    )} />
+                    <span className="text-xs text-foreground">{qa.label}</span>
+                  </div>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={cn(
+                  'flex gap-2',
+                  message.role === 'user' ? 'flex-row-reverse' : ''
+                )}
+              >
+                <div
+                  className={cn(
+                    'flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center',
+                    message.role === 'assistant' ? 'gradient-purple' : 'bg-primary/20'
+                  )}
+                >
+                  {message.role === 'assistant' ? (
+                    <Bot className="h-3.5 w-3.5 text-white" />
+                  ) : (
+                    <User className="h-3.5 w-3.5 text-primary" />
+                  )}
+                </div>
+                
+                <div
+                  className={cn(
+                    'max-w-[85%]',
+                    message.role === 'assistant' ? 'chat-bubble-ai' : 'chat-bubble-user'
+                  )}
+                >
+                  {message.role === 'assistant' ? (
+                    message.content ? (
+                      <AIMessageRenderer content={message.content} watchlist={watchlist} />
+                    ) : isLoading ? (
+                      <span className="flex items-center gap-2 text-xs">
+                        <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                        <span className="text-muted-foreground">Thinking...</span>
+                      </span>
+                    ) : null
+                  ) : (
+                    <p className="text-xs whitespace-pre-wrap">{message.content}</p>
+                  )}
+                  {message.content && (
+                    <p className="text-[9px] mt-1.5 text-muted-foreground/60">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Order Confirmation */}
+            {pendingOrder && (
+              <div className="max-w-[90%] ml-9 animate-in slide-in-from-bottom-4 duration-300">
+                <div className="mb-1.5 flex items-center gap-1.5">
+                  <Clock className="h-3 w-3 text-warning" />
+                  <span className="text-xs font-medium text-warning">Order Awaiting Confirmation</span>
+                </div>
+                <TradeTicketWidget
+                  order={pendingOrder}
+                  stock={watchlist.find((s) => s.symbol === pendingOrder.symbol)}
+                  onConfirm={onConfirmOrder}
+                  onCancel={onCancelOrder}
+                  showActions={true}
+                  isSubmitting={orderStatus === 'submitting'}
+                />
+              </div>
+            )}
+          </>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Quick Actions - When messages exist */}
+      {messages.length > 0 && (
+        <div className="px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
+          {quickActions.map((qa) => (
+            <button
+              key={qa.label}
+              onClick={() => handleQuickAction(qa.action)}
+              disabled={isLoading}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all",
+                "border bg-secondary/30 hover:bg-secondary",
+                qa.variant === 'primary' && "border-primary/30 text-primary",
+                qa.variant === 'success' && "border-success/30 text-success",
+                qa.variant === 'warning' && "border-warning/30 text-warning"
+              )}
+            >
+              <qa.icon className="h-3 w-3" />
+              {qa.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="p-3 border-t border-border/30 bg-card/50">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <Input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask Trai anything..."
+            className="flex-1 h-10 bg-input border-border/50 rounded-xl text-sm"
+            disabled={isLoading}
+          />
+          <Button 
+            type="submit" 
+            size="icon"
+            disabled={!input.trim() || isLoading}
+            className="h-10 w-10 rounded-xl bg-primary hover:bg-primary/90 glow-primary"
+          >
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+
+  // If this is the full page mode (dedicated chat tab), render full page experience
+  if (isFullPage) {
+    return (
+      <div className="h-full flex flex-col bg-background">
+        <ConfirmationToast />
+        {/* Full page header */}
+        <div className="flex items-center justify-between p-4 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl gradient-purple glow-primary flex items-center justify-center">
+              <Sparkles className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg text-foreground">Trai</h1>
+              <p className="text-xs text-muted-foreground flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                AI Trading Assistant • Live
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <OrderStatusBadge />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 text-muted-foreground hover:text-foreground"
+              onClick={() => navigate('/profile')}
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <ChatContent className="flex-1 min-h-0" />
+      </div>
+    );
+  }
+
   // Minimized state - just a floating button
   if (isMinimized) {
     return (
       <>
-        {/* Confirmation toast animation */}
-        {showConfirmAnimation && (
-          <div className="fixed top-6 right-6 z-[60] animate-in slide-in-from-top-4 fade-in duration-300">
-            <div className="flex items-center gap-3 px-4 py-3 bg-success/20 border border-success/30 rounded-xl shadow-lg backdrop-blur">
-              <CheckCircle2 className="h-5 w-5 text-success" />
-              <span className="text-sm font-medium text-success">Order Confirmed!</span>
-            </div>
-          </div>
-        )}
+        <ConfirmationToast />
         <button
           onClick={() => setIsMinimized(false)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center shadow-2xl hover:scale-105 transition-transform"
+          className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-xl gradient-purple glow-primary flex items-center justify-center shadow-xl hover:scale-105 transition-transform"
         >
-          <Sparkles className="h-6 w-6 text-white" />
+          <Sparkles className="h-5 w-5 text-white" />
           {(pendingOrder || orderStatus === 'submitting') && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-warning text-warning-foreground text-xs rounded-full flex items-center justify-center animate-pulse">
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-warning text-warning-foreground text-[10px] rounded-full flex items-center justify-center animate-pulse">
               !
             </span>
           )}
@@ -248,73 +455,68 @@ export const TraiAssistant = ({
   }
 
   // Collapsed state - compact bar at bottom
-  if (!isExpanded) {
+  if (expansionState === 'collapsed') {
     return (
       <>
-        {/* Confirmation toast animation */}
-        {showConfirmAnimation && (
-          <div className="fixed top-6 right-6 z-[60] animate-in slide-in-from-top-4 fade-in duration-300">
-            <div className="flex items-center gap-3 px-4 py-3 bg-success/20 border border-success/30 rounded-xl shadow-lg backdrop-blur">
-              <CheckCircle2 className="h-5 w-5 text-success" />
-              <span className="text-sm font-medium text-success">Order Confirmed!</span>
-            </div>
-          </div>
-        )}
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-4 pointer-events-none md:left-auto md:right-6 md:bottom-6 md:w-[420px]">
-          <div className="pointer-events-auto glass-card rounded-2xl border border-primary/20 shadow-2xl overflow-hidden">
+        <ConfirmationToast />
+        <div className="fixed bottom-0 left-0 right-0 z-40 p-3 pointer-events-none md:left-auto md:right-4 md:bottom-4 md:w-[380px]">
+          <div className="pointer-events-auto glass-card rounded-xl border border-primary/20 shadow-xl overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-border/30">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl gradient-purple flex items-center justify-center">
+            <div className="flex items-center justify-between p-2.5 bg-gradient-to-r from-primary/10 to-transparent border-b border-border/30">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg gradient-purple flex items-center justify-center">
                   <Sparkles className="h-4 w-4 text-white" />
                 </div>
                 <div>
-                  <p className="font-semibold text-sm text-foreground">Trai</p>
-                  <p className="text-xs text-muted-foreground">Ready to help</p>
+                  <p className="font-semibold text-xs text-foreground">Trai</p>
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <span className="h-1 w-1 rounded-full bg-success animate-pulse" />
+                    Live • {currentTab}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 <OrderStatusBadge />
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
                   onClick={() => navigate('/profile')}
                   title="Settings"
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={() => setIsExpanded(true)}
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={toggleExpansion}
                 >
-                  <Maximize2 className="h-4 w-4" />
+                  <Maximize2 className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
                   onClick={() => setIsMinimized(true)}
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
 
             {/* Pending Order Alert */}
             {pendingOrder && (
-              <div className="p-3 bg-warning/10 border-b border-warning/30 flex items-center gap-3 animate-in slide-in-from-top-2">
-                <Clock className="h-4 w-4 text-warning" />
-                <span className="text-sm text-foreground">
+              <div className="p-2 bg-warning/10 border-b border-warning/30 flex items-center gap-2 animate-in slide-in-from-top-2">
+                <Clock className="h-3 w-3 text-warning" />
+                <span className="text-[10px] text-foreground">
                   Pending: <strong>{pendingOrder.side.toUpperCase()}</strong> {pendingOrder.qty} {pendingOrder.symbol}
                 </span>
                 <Button 
                   size="sm" 
                   variant="outline" 
-                  className="ml-auto h-7 text-xs"
-                  onClick={() => setIsExpanded(true)}
+                  className="ml-auto h-6 text-[10px] px-2"
+                  onClick={toggleExpansion}
                 >
                   Review
                 </Button>
@@ -322,41 +524,41 @@ export const TraiAssistant = ({
             )}
 
             {/* Quick Actions */}
-            <div className="p-3 flex gap-2 overflow-x-auto scrollbar-thin">
+            <div className="p-2 flex gap-1.5 overflow-x-auto scrollbar-thin">
               {quickActions.map((qa) => (
                 <button
                   key={qa.label}
                   onClick={() => handleQuickAction(qa.action)}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all",
+                    "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all",
                     "border bg-secondary/50 hover:bg-secondary",
                     qa.variant === 'primary' && "border-primary/30 text-primary hover:border-primary/50",
                     qa.variant === 'success' && "border-success/30 text-success hover:border-success/50",
                     qa.variant === 'warning' && "border-warning/30 text-warning hover:border-warning/50"
                   )}
                 >
-                  <qa.icon className="h-3.5 w-3.5" />
+                  <qa.icon className="h-3 w-3" />
                   {qa.label}
                 </button>
               ))}
             </div>
 
             {/* Input */}
-            <form onSubmit={handleSubmit} className="p-3 pt-0 flex gap-2">
+            <form onSubmit={handleSubmit} className="p-2 pt-0 flex gap-2">
               <Input
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask Trai anything..."
-                className="flex-1 h-10 bg-input/50 border-border/50 rounded-xl text-sm"
+                className="flex-1 h-9 bg-input/50 border-border/50 rounded-lg text-xs"
                 disabled={isLoading}
-                onFocus={() => setIsExpanded(true)}
+                onFocus={toggleExpansion}
               />
               <Button 
                 type="submit" 
                 size="icon"
                 disabled={!input.trim() || isLoading}
-                className="h-10 w-10 rounded-xl bg-primary hover:bg-primary/90"
+                className="h-9 w-9 rounded-lg bg-primary hover:bg-primary/90"
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
@@ -367,35 +569,34 @@ export const TraiAssistant = ({
     );
   }
 
-  // Expanded state - full chat panel
+  // Expanded state - full screen on mobile, panel on desktop
   return (
     <>
-      {/* Confirmation toast animation */}
-      {showConfirmAnimation && (
-        <div className="fixed top-6 right-6 z-[60] animate-in slide-in-from-top-4 fade-in duration-300">
-          <div className="flex items-center gap-3 px-4 py-3 bg-success/20 border border-success/30 rounded-xl shadow-lg backdrop-blur">
-            <CheckCircle2 className="h-5 w-5 text-success" />
-            <span className="text-sm font-medium text-success">Order Confirmed!</span>
-          </div>
-        </div>
-      )}
-      <div className="fixed bottom-0 right-0 z-50 w-full md:w-[450px] h-[70vh] md:h-[600px] md:bottom-6 md:right-6 pointer-events-none">
-        <div className="pointer-events-auto h-full glass-card rounded-t-2xl md:rounded-2xl border border-primary/20 shadow-2xl flex flex-col overflow-hidden">
+      <ConfirmationToast />
+      {/* Mobile: Full screen overlay */}
+      <div className={cn(
+        "fixed z-50 pointer-events-none transition-all duration-300",
+        // Mobile: full screen
+        "inset-0 md:inset-auto",
+        // Desktop: bottom right panel
+        "md:bottom-4 md:right-4 md:w-[400px] md:h-[550px]"
+      )}>
+        <div className="pointer-events-auto h-full glass-card md:rounded-2xl border-t md:border border-primary/20 shadow-2xl flex flex-col overflow-hidden bg-background/95 backdrop-blur-xl">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/10 to-transparent border-b border-border/30">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-purple glow-primary flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-white" />
+          <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-border/30">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl gradient-purple glow-primary flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-white" />
               </div>
               <div>
-                <p className="font-bold text-foreground">Trai</p>
-                <p className="text-xs text-muted-foreground flex items-center gap-2">
+                <p className="font-bold text-sm text-foreground">Trai</p>
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
                   Live • Viewing {currentTab}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <OrderStatusBadge />
               <Button
                 variant="ghost"
@@ -410,7 +611,7 @@ export const TraiAssistant = ({
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={() => setIsExpanded(false)}
+                onClick={() => setExpansionState('collapsed')}
               >
                 <Minimize2 className="h-4 w-4" />
               </Button>
@@ -425,154 +626,7 @@ export const TraiAssistant = ({
             </div>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-4">
-            {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center p-4">
-                <div className="w-16 h-16 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
-                  <Sparkles className="h-8 w-8 text-white" />
-                </div>
-                <h3 className="font-bold text-lg text-foreground mb-2">Hey! I'm Trai</h3>
-                <p className="text-sm text-muted-foreground mb-6 max-w-[280px]">
-                  Your AI trading companion. I can analyze markets, suggest trades, and help you make smarter decisions.
-                </p>
-                <div className="w-full space-y-2">
-                  {quickActions.map((qa) => (
-                    <button
-                      key={qa.label}
-                      onClick={() => handleQuickAction(qa.action)}
-                      className="w-full flex items-center justify-between p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <qa.icon className={cn(
-                          "h-4 w-4",
-                          qa.variant === 'primary' && "text-primary",
-                          qa.variant === 'success' && "text-success",
-                          qa.variant === 'warning' && "text-warning"
-                        )} />
-                        <span className="text-sm text-foreground">{qa.label}</span>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <>
-                {messages.map((message, index) => (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      'flex gap-3',
-                      message.role === 'user' ? 'flex-row-reverse' : ''
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center',
-                        message.role === 'assistant' ? 'gradient-purple' : 'bg-primary/20'
-                      )}
-                    >
-                      {message.role === 'assistant' ? (
-                        <Bot className="h-4 w-4 text-white" />
-                      ) : (
-                        <User className="h-4 w-4 text-primary" />
-                      )}
-                    </div>
-                    
-                    <div
-                      className={cn(
-                        'max-w-[80%]',
-                        message.role === 'assistant' ? 'chat-bubble-ai' : 'chat-bubble-user'
-                      )}
-                    >
-                      {message.role === 'assistant' ? (
-                        message.content ? (
-                          <AIMessageRenderer content={message.content} watchlist={watchlist} />
-                        ) : isLoading ? (
-                          <span className="flex items-center gap-2 text-sm">
-                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                            <span className="text-muted-foreground">Thinking...</span>
-                          </span>
-                        ) : null
-                      ) : (
-                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                      )}
-                      {message.content && (
-                        <p className="text-[10px] mt-2 text-muted-foreground/60">
-                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Order Confirmation with enhanced UI */}
-                {pendingOrder && (
-                  <div className="max-w-[90%] ml-11 animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="mb-2 flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-warning" />
-                      <span className="text-sm font-medium text-warning">Order Awaiting Confirmation</span>
-                    </div>
-                    <TradeTicketWidget
-                      order={pendingOrder}
-                      stock={watchlist.find((s) => s.symbol === pendingOrder.symbol)}
-                      onConfirm={onConfirmOrder}
-                      onCancel={onCancelOrder}
-                      showActions={true}
-                      isSubmitting={orderStatus === 'submitting'}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Quick Actions - When messages exist */}
-          {messages.length > 0 && (
-            <div className="px-4 py-2 border-t border-border/30 flex gap-2 overflow-x-auto scrollbar-thin">
-              {quickActions.map((qa) => (
-                <button
-                  key={qa.label}
-                  onClick={() => handleQuickAction(qa.action)}
-                  disabled={isLoading}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all",
-                    "border bg-secondary/30 hover:bg-secondary",
-                    qa.variant === 'primary' && "border-primary/30 text-primary",
-                    qa.variant === 'success' && "border-success/30 text-success",
-                    qa.variant === 'warning' && "border-warning/30 text-warning"
-                  )}
-                >
-                  <qa.icon className="h-3 w-3" />
-                  {qa.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Input */}
-          <div className="p-4 border-t border-border/30 bg-card/50">
-            <form onSubmit={handleSubmit} className="flex gap-3">
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask Trai anything..."
-                className="flex-1 h-11 bg-input border-border/50 rounded-xl"
-                disabled={isLoading}
-              />
-              <Button 
-                type="submit" 
-                size="icon"
-                disabled={!input.trim() || isLoading}
-                className="h-11 w-11 rounded-xl bg-primary hover:bg-primary/90 glow-primary"
-              >
-                {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-              </Button>
-            </form>
-          </div>
+          <ChatContent className="flex-1 min-h-0" />
         </div>
       </div>
     </>
