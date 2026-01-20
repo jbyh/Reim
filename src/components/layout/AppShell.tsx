@@ -166,41 +166,44 @@ export const AppShell = () => {
             />
           )}
 
-          {/* Chat tab just opens the Trai panel */}
+          {/* Chat tab - Full page Trai experience */}
           {activeTab === 'chat' && (
-            <div className="h-full flex items-center justify-center p-8">
-              <div className="text-center max-w-md">
-                <div className="w-20 h-20 rounded-3xl gradient-purple glow-primary flex items-center justify-center mx-auto mb-6">
-                  <span className="text-3xl">✨</span>
-                </div>
-                <h2 className="text-2xl font-bold text-foreground mb-3">
-                  Chat with <span className="text-gradient-purple">Trai</span>
-                </h2>
-                <p className="text-muted-foreground">
-                  Trai is always available in the corner of your screen. 
-                  Start a conversation to get market insights, trade ideas, and portfolio analysis.
-                </p>
-              </div>
-            </div>
+            <TraiAssistant
+              messages={messages}
+              pendingOrder={pendingOrder}
+              watchlist={watchlist}
+              positions={positions}
+              isLoading={isLoading}
+              currentTab={activeTab}
+              currentSymbol={optionsSymbol}
+              orderStatus={orderStatus}
+              onSendMessage={sendMessage}
+              onConfirmOrder={confirmOrder}
+              onCancelOrder={cancelOrder}
+              onNavigate={handleNavigate}
+              isFullPage={true}
+            />
           )}
         </main>
       </div>
 
-      {/* Omnipresent Trai Assistant */}
-      <TraiAssistant
-        messages={messages}
-        pendingOrder={pendingOrder}
-        watchlist={watchlist}
-        positions={positions}
-        isLoading={isLoading}
-        currentTab={activeTab}
-        currentSymbol={optionsSymbol}
-        orderStatus={orderStatus}
-        onSendMessage={sendMessage}
-        onConfirmOrder={confirmOrder}
-        onCancelOrder={cancelOrder}
-        onNavigate={handleNavigate}
-      />
+      {/* Omnipresent Trai Assistant - hidden when on chat tab */}
+      {activeTab !== 'chat' && (
+        <TraiAssistant
+          messages={messages}
+          pendingOrder={pendingOrder}
+          watchlist={watchlist}
+          positions={positions}
+          isLoading={isLoading}
+          currentTab={activeTab}
+          currentSymbol={optionsSymbol}
+          orderStatus={orderStatus}
+          onSendMessage={sendMessage}
+          onConfirmOrder={confirmOrder}
+          onCancelOrder={cancelOrder}
+          onNavigate={handleNavigate}
+        />
+      )}
     </div>
   );
 };
