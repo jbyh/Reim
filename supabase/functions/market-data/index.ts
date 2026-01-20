@@ -57,7 +57,11 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Cache key for the current request (used for graceful 429 handling)
+  let cacheKey: string | null = null;
+
   try {
+
     // Initialize Supabase client to get user's credentials
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -304,14 +308,15 @@ serve(async (req) => {
     }
 
     // Check cache first
-    const cacheKey = `quotes:${symbols.sort().join(',')}`;
+    cacheKey = `quotes:${symbols.sort().join(',')}`;
     const cachedData = getCached(cacheKey);
     if (cachedData) {
       console.log('Returning cached market data for:', symbols);
-      return new Response(JSON.stringify({ data: cachedData }), {
+      return new Response(JSON.stringify({ data: cachedData, cached: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     // Rate limit protection - wait if needed to prevent 429 errors
     const now = Date.now();
@@ -327,71 +332,46 @@ serve(async (req) => {
 
     const marketData: Record<string, any> = {};
 
-    // Fetch stock data
+    // Fetch stock data (use snapshots to reduce API calls: 1 request vs 3)
     if (stockSymbols.length > 0) {
       const symbolsParam = stockSymbols.join(',');
-      
-      // Fetch latest quotes (includes bid/ask)
-      const quotesResponse = await fetch(
-        `${ALPACA_DATA_URL}/stocks/quotes/latest?symbols=${symbolsParam}`,
+
+      const snapshotsResponse = await fetch(
+        `${ALPACA_DATA_URL}/stocks/snapshots?symbols=${symbolsParam}`,
         { headers: alpacaHeaders }
       );
 
-      if (!quotesResponse.ok) {
-        const errorText = await quotesResponse.text();
-        console.error('Alpaca quotes error:', quotesResponse.status, errorText);
-        throw new Error(`Alpaca API error: ${quotesResponse.status}`);
+      if (!snapshotsResponse.ok) {
+        const errorText = await snapshotsResponse.text();
+        console.error('Alpaca snapshots error:', snapshotsResponse.status, errorText);
+        throw new Error(`Alpaca API error: ${snapshotsResponse.status}`);
       }
 
-      const quotesData = await quotesResponse.json();
-
-      // Fetch latest trades (includes last trade price)
-      const tradesResponse = await fetch(
-        `${ALPACA_DATA_URL}/stocks/trades/latest?symbols=${symbolsParam}`,
-        { headers: alpacaHeaders }
-      );
-
-      if (!tradesResponse.ok) {
-        const errorText = await tradesResponse.text();
-        console.error('Alpaca trades error:', tradesResponse.status, errorText);
-        throw new Error(`Alpaca API error: ${tradesResponse.status}`);
-      }
-
-      const tradesData = await tradesResponse.json();
-
-      // Fetch previous day bars for change calculation
-      const barsResponse = await fetch(
-        `${ALPACA_DATA_URL}/stocks/bars?symbols=${symbolsParam}&timeframe=1Day&limit=2`,
-        { headers: alpacaHeaders }
-      );
-
-      let barsData: { bars: Record<string, Array<{ c: number }>> } = { bars: {} };
-      if (barsResponse.ok) {
-        barsData = await barsResponse.json() as { bars: Record<string, Array<{ c: number }>> };
-      }
+      const snapshotsData = await snapshotsResponse.json();
 
       // Combine data for each stock symbol
       for (const sym of stockSymbols) {
-        const quote = quotesData.quotes?.[sym];
-        const trade = tradesData.trades?.[sym];
-        const bars = barsData.bars?.[sym] || [];
-        
-        const lastPrice = trade?.p || quote?.ap || 0;
-        const prevClose = bars.length >= 2 ? bars[bars.length - 2]?.c : bars[0]?.c || lastPrice;
+        const snap = snapshotsData?.snapshots?.[sym];
+        const latestTrade = snap?.latestTrade;
+        const latestQuote = snap?.latestQuote;
+        const prevDailyBar = snap?.prevDailyBar;
+
+        const lastPrice = latestTrade?.p || latestQuote?.ap || 0;
+        const prevClose = prevDailyBar?.c || lastPrice;
         const change = lastPrice - prevClose;
         const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
         marketData[sym] = {
           symbol: sym,
-          lastPrice: lastPrice,
-          bidPrice: quote?.bp || 0,
-          askPrice: quote?.ap || 0,
-          bidSize: quote?.bs || 0,
-          askSize: quote?.as || 0,
-          lastSize: trade?.s || 0,
-          change: change,
-          changePercent: changePercent,
-          timestamp: trade?.t || quote?.t || new Date().toISOString(),
+          lastPrice,
+          bidPrice: latestQuote?.bp || 0,
+          askPrice: latestQuote?.ap || 0,
+          bidSize: latestQuote?.bs || 0,
+          askSize: latestQuote?.as || 0,
+          lastSize: latestTrade?.s || 0,
+          change,
+          changePercent,
+          timestamp: latestTrade?.t || latestQuote?.t || new Date().toISOString(),
           assetType: 'stock',
         };
       }
@@ -480,6 +460,24 @@ serve(async (req) => {
     const isUnauthorized = msg.includes('401') || msg.includes('Authorization');
 
     console.error('Market data error:', error);
+
+    const isRateLimited = msg.includes('429') || msg.toLowerCase().includes('too many requests');
+
+    // If rate limited, prefer returning cached/stale data instead of throwing 500 (prevents blank screen)
+    if (isRateLimited && cacheKey) {
+      const cached = getCached(cacheKey);
+      return new Response(
+        JSON.stringify({
+          data: cached || {},
+          rateLimited: true,
+          error: 'Rate limited by data provider. Showing last known prices.',
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     return new Response(
       JSON.stringify({
