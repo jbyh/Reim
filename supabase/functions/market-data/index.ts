@@ -434,7 +434,7 @@ serve(async (req) => {
       );
 
       // Fetch crypto bars for change calculation
-      const cryptoBarsResponse = await fetch(
+      const cryptoBarsResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/bars?symbols=${cryptoSymbolsParam}&timeframe=1Day&limit=2`,
         { headers: alpacaHeaders }
       );
