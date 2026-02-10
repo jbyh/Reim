@@ -245,9 +245,9 @@ export const TraiAssistant = ({
 
   // Chat content component - shared between overlay and full page
   const ChatContent = ({ className = '' }: { className?: string }) => (
-    <div className={cn("flex flex-col h-full min-h-0", className)}>
+    <div className={cn("flex flex-col min-h-0 overflow-hidden", className)}>
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4 space-y-3 min-h-0">
+      <div className="flex-1 overflow-y-auto overscroll-contain scrollbar-thin p-3 md:p-4 space-y-3 min-h-0">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-4">
             <div className="w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
