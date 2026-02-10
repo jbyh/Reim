@@ -354,7 +354,7 @@ export const TraiAssistant = ({
 
       {/* Quick Actions - When messages exist */}
       {messages.length > 0 && (
-        <div className="px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
+        <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
           {quickActions.map((qa) => (
             <button
               key={qa.label}
