@@ -137,14 +137,16 @@ export const TraiAssistant = ({
   }, [currentTab, currentSymbol, positions, pendingOrder]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
   };
 
   useEffect(() => {
     if (expansionState !== 'collapsed' || isFullPage) {
       scrollToBottom();
     }
-  }, [messages, expansionState, isFullPage]);
+  }, [messages, pendingOrder, expansionState, isFullPage]);
 
   useEffect(() => {
     if (orderStatus === 'confirmed') {
@@ -245,9 +247,9 @@ export const TraiAssistant = ({
 
   // Chat content component - shared between overlay and full page
   const ChatContent = ({ className = '' }: { className?: string }) => (
-    <div className={cn("flex flex-col h-full min-h-0", className)}>
+    <div className={cn("flex flex-col min-h-0 overflow-hidden", className)}>
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4 space-y-3 min-h-0">
+      <div className="flex-1 overflow-y-auto overscroll-contain scrollbar-thin p-3 md:p-4 space-y-3 min-h-0">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-4">
             <div className="w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
@@ -352,7 +354,7 @@ export const TraiAssistant = ({
 
       {/* Quick Actions - When messages exist */}
       {messages.length > 0 && (
-        <div className="px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
+        <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
           {quickActions.map((qa) => (
             <button
               key={qa.label}
@@ -374,7 +376,7 @@ export const TraiAssistant = ({
       )}
 
       {/* Input */}
-      <div className="p-3 border-t border-border/30 bg-card/50">
+      <div className="flex-shrink-0 p-3 border-t border-border/30 bg-card/50">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             ref={inputRef}
@@ -400,7 +402,7 @@ export const TraiAssistant = ({
   // If this is the full page mode (dedicated chat tab), render full page experience
   if (isFullPage) {
     return (
-      <div className="h-full flex flex-col bg-background">
+      <div className="h-full flex flex-col bg-background overflow-hidden">
         <ConfirmationToast />
         {/* Full page header */}
         <div className="flex items-center justify-between p-4 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
@@ -581,7 +583,7 @@ export const TraiAssistant = ({
         // Desktop: bottom right panel
         "md:bottom-4 md:right-4 md:w-[400px] md:h-[550px]"
       )}>
-        <div className="pointer-events-auto h-full glass-card md:rounded-2xl border-t md:border border-primary/20 shadow-2xl flex flex-col overflow-hidden bg-background/95 backdrop-blur-xl min-h-0">
+        <div className="pointer-events-auto h-full glass-card md:rounded-2xl border-t md:border border-primary/20 shadow-2xl flex flex-col overflow-hidden bg-background/95 backdrop-blur-xl" style={{ maxHeight: '100dvh' }}>
           {/* Header */}
           <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-border/30">
             <div className="flex items-center gap-2">

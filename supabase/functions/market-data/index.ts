@@ -136,26 +136,64 @@ serve(async (req) => {
       ? 'https://paper-api.alpaca.markets/v2'
       : 'https://api.alpaca.markets/v2';
 
-    if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
-      throw new Error('Alpaca API credentials not configured. Please add your API keys in Settings.');
+    const hasAlpacaCredentials = !!(ALPACA_API_KEY && ALPACA_API_SECRET);
+
+    if (!hasAlpacaCredentials && action && ['account', 'positions', 'activities', 'submit_order', 'orders'].includes(action)) {
+      throw new Error('Alpaca API credentials not configured. Please add your API keys in Settings to trade.');
     }
 
     // Guard against accidentally pasting labels like "ALPACA_API_KEY=..."
-    if (ALPACA_API_KEY.includes('=') || ALPACA_API_SECRET.includes('=')) {
+    if (hasAlpacaCredentials && (ALPACA_API_KEY!.includes('=') || ALPACA_API_SECRET!.includes('='))) {
       throw new Error('Alpaca API credentials look malformed (remove any KEY= / SECRET= prefix).');
     }
 
-    const alpacaHeaders = {
-      'APCA-API-KEY-ID': ALPACA_API_KEY,
-      'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
+    const alpacaHeaders = hasAlpacaCredentials ? {
+      'APCA-API-KEY-ID': ALPACA_API_KEY!,
+      'APCA-API-SECRET-KEY': ALPACA_API_SECRET!,
       'Accept': 'application/json',
-    };
+    } : null;
 
     const body = await req.json();
     const { action, symbols, symbol, timeframe, start, end } = body;
 
-    // Route to different handlers based on action
+    // --- Free fallback: Yahoo Finance for quotes when no Alpaca creds ---
+    async function fetchYahooQuotes(syms: string[]): Promise<Record<string, any>> {
+      const results: Record<string, any> = {};
+      try {
+        const symbolsParam = syms.join(',');
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsParam}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,bid,ask,bidSize,askSize`;
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const quotes = json?.quoteResponse?.result || [];
+          for (const q of quotes) {
+            results[q.symbol] = {
+              symbol: q.symbol,
+              lastPrice: q.regularMarketPrice || 0,
+              bidPrice: q.bid || 0,
+              askPrice: q.ask || 0,
+              bidSize: q.bidSize || 0,
+              askSize: q.askSize || 0,
+              lastSize: 0,
+              change: q.regularMarketChange || 0,
+              changePercent: q.regularMarketChangePercent || 0,
+              timestamp: new Date().toISOString(),
+              assetType: q.quoteType === 'CRYPTOCURRENCY' ? 'crypto' : 'stock',
+              delayed: true,
+            };
+          }
+        }
+      } catch (e) {
+        console.error('Yahoo Finance fallback error:', e);
+      }
+      return results;
+    }
+
+    // Actions that require Alpaca credentials
     if (action === 'account') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
       cacheKey = 'account';
       const cached = getCached(cacheKey);
       if (cached) {
@@ -177,6 +215,7 @@ serve(async (req) => {
     }
 
     if (action === 'positions') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
       cacheKey = 'positions';
       const cached = getCached(cacheKey);
       if (cached) {
@@ -198,6 +237,7 @@ serve(async (req) => {
     }
 
     if (action === 'activities') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
       cacheKey = 'activities';
       const cached = getCached(cacheKey);
       if (cached) {
@@ -223,8 +263,8 @@ serve(async (req) => {
 
     // Submit order to Alpaca
     if (action === 'submit_order') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
       const { orderSymbol, qty, side, type, limitPrice, stopLoss, takeProfit } = body;
-      
       if (!orderSymbol || !qty || !side) {
         throw new Error('Missing required order parameters: symbol, qty, side');
       }
@@ -284,6 +324,7 @@ serve(async (req) => {
 
     // Get orders
     if (action === 'orders') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
       cacheKey = 'orders';
       const cached = getCached(cacheKey);
       if (cached) {
@@ -310,6 +351,7 @@ serve(async (req) => {
 
     // Fetch crypto bars
     if (action === 'crypto_bars' && symbol) {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required for chart data');
       const cryptoSymbol = normalizeCryptoSymbol(symbol);
       const url = new URL(`${ALPACA_CRYPTO_URL}/bars`);
       url.searchParams.set('symbols', cryptoSymbol);
@@ -334,6 +376,7 @@ serve(async (req) => {
 
     // Fetch stock bars
     if (action === 'bars' && symbol) {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required for chart data');
       const url = new URL(`${ALPACA_DATA_URL}/stocks/${symbol}/bars`);
       url.searchParams.set('timeframe', timeframe || '1Day');
       url.searchParams.set('limit', '365');
@@ -369,6 +412,17 @@ serve(async (req) => {
       });
     }
 
+    // If no Alpaca credentials, use Yahoo Finance fallback for quotes
+    if (!alpacaHeaders) {
+      console.log('No Alpaca credentials, using Yahoo Finance fallback for:', symbols);
+      const yahooData = await fetchYahooQuotes(symbols);
+      if (Object.keys(yahooData).length > 0) {
+        setCache(cacheKey, yahooData);
+      }
+      return new Response(JSON.stringify({ data: yahooData, delayed: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Rate limit protection - wait if needed to prevent 429 errors
     const now = Date.now();
