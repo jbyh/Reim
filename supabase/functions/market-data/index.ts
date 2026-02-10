@@ -12,11 +12,12 @@ const ALPACA_CRYPTO_URL = 'https://data.alpaca.markets/v1beta3/crypto/us';
 
 // Simple in-memory cache to reduce API calls and prevent rate limiting
 const cache: Map<string, { data: any; timestamp: number }> = new Map();
-const CACHE_TTL_MS = 15000; // 15 second cache for market data to prevent rate limiting
+const CACHE_TTL_MS = 30000; // 30 second cache to prevent rate limiting
+const STALE_TTL_MS = 300000; // 5 min stale cache for fallback on errors
 
 // Track last request time to enforce minimum delay between API calls
 let lastApiCallTime = 0;
-const MIN_API_DELAY_MS = 2000; // Minimum 2 seconds between API calls
+const MIN_API_DELAY_MS = 3000; // Minimum 3 seconds between API calls
 
 const getCached = (key: string): any | null => {
   const cached = cache.get(key);
@@ -26,16 +27,33 @@ const getCached = (key: string): any | null => {
   return null;
 };
 
+// Return stale data (up to 5 min old) as fallback during errors
+const getStaleCached = (key: string): any | null => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < STALE_TTL_MS) {
+    return cached.data;
+  }
+  return null;
+};
+
 const setCache = (key: string, data: any): void => {
   cache.set(key, { data, timestamp: Date.now() });
-  // Cleanup old entries periodically
-  if (cache.size > 100) {
+  if (cache.size > 200) {
     const now = Date.now();
     for (const [k, v] of cache) {
-      if (now - v.timestamp > CACHE_TTL_MS * 2) {
+      if (now - v.timestamp > STALE_TTL_MS) {
         cache.delete(k);
       }
     }
+  }
+};
+
+// Safe fetch wrapper that catches connection errors
+const safeFetch = async (url: string, options: RequestInit): Promise<Response> => {
+  try {
+    return await fetch(url, options);
+  } catch (err) {
+    throw new Error(`CONNECTION_ERROR: ${err instanceof Error ? err.message : 'Network error'}`);
   }
 };
 
@@ -126,49 +144,66 @@ serve(async (req) => {
 
     // Route to different handlers based on action
     if (action === 'account') {
-      const response = await fetch(`${ALPACA_TRADING_URL}/account`, {
-        headers: alpacaHeaders,
-      });
+      cacheKey = 'account';
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const response = await safeFetch(`${ALPACA_TRADING_URL}/account`, { headers: alpacaHeaders });
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Alpaca account error:', response.status, errorText);
         throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'positions') {
-      const response = await fetch(`${ALPACA_TRADING_URL}/positions`, {
-        headers: alpacaHeaders,
-      });
+      cacheKey = 'positions';
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const response = await safeFetch(`${ALPACA_TRADING_URL}/positions`, { headers: alpacaHeaders });
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Alpaca positions error:', response.status, errorText);
         throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'activities') {
+      cacheKey = 'activities';
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const url = new URL(`${ALPACA_TRADING_URL}/account/activities`);
       url.searchParams.set('direction', 'desc');
       url.searchParams.set('page_size', '100');
-      
-      const response = await fetch(url.toString(), {
-        headers: alpacaHeaders,
-      });
+      const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Alpaca activities error:', response.status, errorText);
         throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -212,7 +247,7 @@ serve(async (req) => {
       console.log('Submitting order to Alpaca:', orderPayload);
       console.log('Using trading URL:', ALPACA_TRADING_URL);
 
-      const response = await fetch(`${ALPACA_TRADING_URL}/orders`, {
+      const response = await safeFetch(`${ALPACA_TRADING_URL}/orders`, {
         method: 'POST',
         headers: {
           ...alpacaHeaders,
@@ -237,20 +272,25 @@ serve(async (req) => {
 
     // Get orders
     if (action === 'orders') {
+      cacheKey = 'orders';
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const url = new URL(`${ALPACA_TRADING_URL}/orders`);
       url.searchParams.set('status', 'all');
       url.searchParams.set('limit', '50');
       url.searchParams.set('direction', 'desc');
-      
-      const response = await fetch(url.toString(), {
-        headers: alpacaHeaders,
-      });
+      const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Alpaca orders error:', response.status, errorText);
         throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -266,7 +306,7 @@ serve(async (req) => {
       if (start) url.searchParams.set('start', start);
       if (end) url.searchParams.set('end', end);
 
-      const response = await fetch(url.toString(), {
+      const response = await safeFetch(url.toString(), {
         headers: alpacaHeaders,
       });
       if (!response.ok) {
@@ -288,7 +328,7 @@ serve(async (req) => {
       if (start) url.searchParams.set('start', start);
       if (end) url.searchParams.set('end', end);
 
-      const response = await fetch(url.toString(), {
+      const response = await safeFetch(url.toString(), {
         headers: alpacaHeaders,
       });
       if (!response.ok) {
@@ -336,7 +376,7 @@ serve(async (req) => {
     if (stockSymbols.length > 0) {
       const symbolsParam = stockSymbols.join(',');
 
-      const snapshotsResponse = await fetch(
+      const snapshotsResponse = await safeFetch(
         `${ALPACA_DATA_URL}/stocks/snapshots?symbols=${symbolsParam}`,
         { headers: alpacaHeaders }
       );
@@ -382,19 +422,19 @@ serve(async (req) => {
       const cryptoSymbolsParam = cryptoSymbols.join(',');
       
       // Fetch latest crypto trades
-      const cryptoTradesResponse = await fetch(
+      const cryptoTradesResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/latest/trades?symbols=${cryptoSymbolsParam}`,
         { headers: alpacaHeaders }
       );
 
       // Fetch latest crypto quotes
-      const cryptoQuotesResponse = await fetch(
+      const cryptoQuotesResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/latest/quotes?symbols=${cryptoSymbolsParam}`,
         { headers: alpacaHeaders }
       );
 
       // Fetch crypto bars for change calculation
-      const cryptoBarsResponse = await fetch(
+      const cryptoBarsResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/bars?symbols=${cryptoSymbolsParam}&timeframe=1Day&limit=2`,
         { headers: alpacaHeaders }
       );
@@ -455,22 +495,40 @@ serve(async (req) => {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-
-    // Alpaca uses 401 for invalid/expired keys or wrong environment (paper vs live)
     const isUnauthorized = msg.includes('401') || msg.includes('Authorization');
-
-    console.error('Market data error:', error);
-
     const isRateLimited = msg.includes('429') || msg.toLowerCase().includes('too many requests');
+    const isConnectionError = msg.includes('CONNECTION_ERROR') || msg.includes('connection closed');
 
-    // If rate limited, prefer returning cached/stale data instead of throwing 500 (prevents blank screen)
-    if (isRateLimited && cacheKey) {
-      const cached = getCached(cacheKey);
+    console.error('Market data error:', msg);
+
+    // For rate limits or connection errors, return stale cached data to prevent blank screen
+    if ((isRateLimited || isConnectionError) && cacheKey) {
+      const stale = getStaleCached(cacheKey);
+      if (stale) {
+        return new Response(
+          JSON.stringify({
+            data: stale,
+            rateLimited: isRateLimited,
+            stale: true,
+            error: isRateLimited
+              ? 'Rate limited by data provider. Showing last known data.'
+              : 'Connection issue. Showing last known data.',
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    }
+
+    // For rate limits without cache, still return 200 with empty data to prevent blank screen
+    if (isRateLimited || isConnectionError) {
       return new Response(
         JSON.stringify({
-          data: cached || {},
-          rateLimited: true,
-          error: 'Rate limited by data provider. Showing last known prices.',
+          data: {},
+          rateLimited: isRateLimited,
+          error: 'Temporarily unable to fetch data. Will retry shortly.',
         }),
         {
           status: 200,
