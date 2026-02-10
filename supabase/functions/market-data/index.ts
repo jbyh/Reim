@@ -407,6 +407,17 @@ serve(async (req) => {
       });
     }
 
+    // If no Alpaca credentials, use Yahoo Finance fallback for quotes
+    if (!alpacaHeaders) {
+      console.log('No Alpaca credentials, using Yahoo Finance fallback for:', symbols);
+      const yahooData = await fetchYahooQuotes(symbols);
+      if (Object.keys(yahooData).length > 0) {
+        setCache(cacheKey, yahooData);
+      }
+      return new Response(JSON.stringify({ data: yahooData, delayed: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Rate limit protection - wait if needed to prevent 429 errors
     const now = Date.now();
