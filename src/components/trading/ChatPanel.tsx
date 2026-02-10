@@ -71,7 +71,7 @@ export const ChatPanel = ({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-5 min-h-0">
+      <div className="flex-1 overflow-y-auto overscroll-contain scrollbar-thin p-5 space-y-5 min-h-0">
         {messages.map((message, index) => (
           <div
             key={message.id}
