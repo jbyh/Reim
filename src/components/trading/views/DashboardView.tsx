@@ -50,7 +50,7 @@ export const DashboardView = ({
           </div>
 
           {/* Positions Card - 5 cols */}
-          <div className="md:col-span-1 xl:col-span-5">
+          <div className="md:col-span-2 lg:col-span-5">
             <div className="glass-card rounded-2xl overflow-hidden h-full">
               <div className="p-4 lg:p-5 border-b border-border/40 flex items-center justify-between">
                 <div className="flex items-center gap-3">
