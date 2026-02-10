@@ -376,7 +376,7 @@ serve(async (req) => {
     if (stockSymbols.length > 0) {
       const symbolsParam = stockSymbols.join(',');
 
-      const snapshotsResponse = await fetch(
+      const snapshotsResponse = await safeFetch(
         `${ALPACA_DATA_URL}/stocks/snapshots?symbols=${symbolsParam}`,
         { headers: alpacaHeaders }
       );
