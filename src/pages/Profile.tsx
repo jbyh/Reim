@@ -262,17 +262,35 @@ export const Profile = () => {
               </div>
 
               {hasAlpacaCredentials && (
-                <div className="bg-success/10 border border-success/20 rounded-xl p-4 flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-success">Keys Configured</p>
-                    <p className="text-muted-foreground">Your Alpaca credentials are securely stored. Enter new keys below to update them.</p>
+                <div className="bg-success/10 border border-success/20 rounded-xl p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0 mt-0.5" />
+                    <div className="text-sm flex-1">
+                      <p className="font-medium text-success">Keys Saved & Encrypted</p>
+                      <p className="text-muted-foreground">Your credentials are securely stored. Enter new keys below to update them.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2 pl-8">
+                    <div className="flex items-center justify-between bg-background/50 rounded-lg px-3 py-2">
+                      <span className="text-xs text-muted-foreground">API Key ID</span>
+                      <span className="text-xs font-mono text-foreground/70">••••••••••••••••</span>
+                    </div>
+                    <div className="flex items-center justify-between bg-background/50 rounded-lg px-3 py-2">
+                      <span className="text-xs text-muted-foreground">Secret Key</span>
+                      <span className="text-xs font-mono text-foreground/70">••••••••••••••••</span>
+                    </div>
+                    <div className="flex items-center justify-between bg-background/50 rounded-lg px-3 py-2">
+                      <span className="text-xs text-muted-foreground">Mode</span>
+                      <span className={`text-xs font-medium ${profile?.alpaca_paper_trading ? 'text-warning' : 'text-destructive'}`}>
+                        {profile?.alpaca_paper_trading ? '📄 Paper Trading' : '💰 Live Trading'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="alpacaApiKey">API Key ID</Label>
+                <Label htmlFor="alpacaApiKey">{hasAlpacaCredentials ? 'Update API Key ID' : 'API Key ID'}</Label>
                 <div className="relative">
                   <Input
                     id="alpacaApiKey"
@@ -289,7 +307,7 @@ export const Profile = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="alpacaSecretKey">Secret Key</Label>
+                <Label htmlFor="alpacaSecretKey">{hasAlpacaCredentials ? 'Update Secret Key' : 'Secret Key'}</Label>
                 <div className="relative">
                   <Input
                     id="alpacaSecretKey"
