@@ -247,7 +247,7 @@ serve(async (req) => {
       console.log('Submitting order to Alpaca:', orderPayload);
       console.log('Using trading URL:', ALPACA_TRADING_URL);
 
-      const response = await fetch(`${ALPACA_TRADING_URL}/orders`, {
+      const response = await safeFetch(`${ALPACA_TRADING_URL}/orders`, {
         method: 'POST',
         headers: {
           ...alpacaHeaders,
