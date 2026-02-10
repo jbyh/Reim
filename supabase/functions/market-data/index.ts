@@ -351,6 +351,7 @@ serve(async (req) => {
 
     // Fetch crypto bars
     if (action === 'crypto_bars' && symbol) {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required for chart data');
       const cryptoSymbol = normalizeCryptoSymbol(symbol);
       const url = new URL(`${ALPACA_CRYPTO_URL}/bars`);
       url.searchParams.set('symbols', cryptoSymbol);
