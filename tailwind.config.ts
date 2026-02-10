@@ -124,6 +124,7 @@ export default {
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         "shimmer": "shimmer 2s linear infinite",
         "float": "float 3s ease-in-out infinite",
+        "ticker-scroll": "ticker-scroll 30s linear infinite",
       },
     },
   },
