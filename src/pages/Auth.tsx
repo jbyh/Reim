@@ -13,7 +13,7 @@ export const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, hasAlpacaCredentials, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const handleSignIn = async (e: React.FormEvent) => {
