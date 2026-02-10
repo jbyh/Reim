@@ -216,6 +216,7 @@ serve(async (req) => {
 
     if (action === 'positions') {
       if (!alpacaHeaders) throw new Error('Alpaca credentials required');
+      cacheKey = 'positions';
       const cached = getCached(cacheKey);
       if (cached) {
         return new Response(JSON.stringify({ data: cached, cached: true }), {
