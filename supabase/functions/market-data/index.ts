@@ -153,6 +153,44 @@ serve(async (req) => {
       'Accept': 'application/json',
     } : null;
 
+    const body = await req.json();
+    const { action, symbols, symbol, timeframe, start, end } = body;
+
+    // --- Free fallback: Yahoo Finance for quotes when no Alpaca creds ---
+    async function fetchYahooQuotes(syms: string[]): Promise<Record<string, any>> {
+      const results: Record<string, any> = {};
+      try {
+        const symbolsParam = syms.join(',');
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbolsParam}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,bid,ask,bidSize,askSize`;
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const quotes = json?.quoteResponse?.result || [];
+          for (const q of quotes) {
+            results[q.symbol] = {
+              symbol: q.symbol,
+              lastPrice: q.regularMarketPrice || 0,
+              bidPrice: q.bid || 0,
+              askPrice: q.ask || 0,
+              bidSize: q.bidSize || 0,
+              askSize: q.askSize || 0,
+              lastSize: 0,
+              change: q.regularMarketChange || 0,
+              changePercent: q.regularMarketChangePercent || 0,
+              timestamp: new Date().toISOString(),
+              assetType: q.quoteType === 'CRYPTOCURRENCY' ? 'crypto' : 'stock',
+              delayed: true,
+            };
+          }
+        }
+      } catch (e) {
+        console.error('Yahoo Finance fallback error:', e);
+      }
+      return results;
+    }
+
     // Actions that require Alpaca credentials
     if (action === 'account') {
       if (!alpacaHeaders) throw new Error('Alpaca credentials required');
