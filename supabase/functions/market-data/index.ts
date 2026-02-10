@@ -147,11 +147,11 @@ serve(async (req) => {
       throw new Error('Alpaca API credentials look malformed (remove any KEY= / SECRET= prefix).');
     }
 
-    const alpacaHeaders = {
-      'APCA-API-KEY-ID': ALPACA_API_KEY,
-      'APCA-API-SECRET-KEY': ALPACA_API_SECRET,
+    const alpacaHeaders = hasAlpacaCredentials ? {
+      'APCA-API-KEY-ID': ALPACA_API_KEY!,
+      'APCA-API-SECRET-KEY': ALPACA_API_SECRET!,
       'Accept': 'application/json',
-    };
+    } : null;
 
     const body = await req.json();
     const { action, symbols, symbol, timeframe, start, end } = body;
