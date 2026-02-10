@@ -279,14 +279,16 @@ export const useTradingState = () => {
       const symbol = parsed.symbol;
       if (!symbol || typeof symbol !== 'string' || symbol.length < 1 || symbol.length > 10) return null;
 
+      const symbolIsCrypto = isCryptoSymbol(symbol);
+
       return {
         symbol: parsed.symbol,
         qty: parsed.quantity,
         side: parsed.side,
         type: parsed.orderType || 'market',
         limitPrice: parsed.suggestions?.limitPrice,
-        stopLoss: isCrypto ? undefined : parsed.suggestions?.stopLoss, // No bracket orders for crypto
-        takeProfit: isCrypto ? undefined : parsed.suggestions?.takeProfit,
+        stopLoss: symbolIsCrypto ? undefined : parsed.suggestions?.stopLoss,
+        takeProfit: symbolIsCrypto ? undefined : parsed.suggestions?.takeProfit,
       };
     } catch {
       return null;
