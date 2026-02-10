@@ -143,7 +143,7 @@ serve(async (req) => {
     }
 
     // Guard against accidentally pasting labels like "ALPACA_API_KEY=..."
-    if (ALPACA_API_KEY.includes('=') || ALPACA_API_SECRET.includes('=')) {
+    if (hasAlpacaCredentials && (ALPACA_API_KEY!.includes('=') || ALPACA_API_SECRET!.includes('='))) {
       throw new Error('Alpaca API credentials look malformed (remove any KEY= / SECRET= prefix).');
     }
 
