@@ -376,6 +376,7 @@ serve(async (req) => {
 
     // Fetch stock bars
     if (action === 'bars' && symbol) {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required for chart data');
       const url = new URL(`${ALPACA_DATA_URL}/stocks/${symbol}/bars`);
       url.searchParams.set('timeframe', timeframe || '1Day');
       url.searchParams.set('limit', '365');
