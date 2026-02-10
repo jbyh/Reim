@@ -40,7 +40,7 @@ export const DashboardView = ({
           </div>
 
           {/* Trai Greeting - 4 cols on right */}
-          <div className="md:col-span-1 xl:col-span-4 row-span-1">
+          <div className="md:col-span-2 lg:col-span-4 row-span-1">
             <TraiGreeting 
               portfolio={portfolio} 
               positions={positions}
