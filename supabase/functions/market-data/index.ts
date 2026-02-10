@@ -306,7 +306,7 @@ serve(async (req) => {
       if (start) url.searchParams.set('start', start);
       if (end) url.searchParams.set('end', end);
 
-      const response = await fetch(url.toString(), {
+      const response = await safeFetch(url.toString(), {
         headers: alpacaHeaders,
       });
       if (!response.ok) {
