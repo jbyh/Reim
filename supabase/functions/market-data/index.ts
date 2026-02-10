@@ -153,11 +153,9 @@ serve(async (req) => {
       'Accept': 'application/json',
     } : null;
 
-    const body = await req.json();
-    const { action, symbols, symbol, timeframe, start, end } = body;
-
-    // Route to different handlers based on action
+    // Actions that require Alpaca credentials
     if (action === 'account') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
       cacheKey = 'account';
       const cached = getCached(cacheKey);
       if (cached) {
