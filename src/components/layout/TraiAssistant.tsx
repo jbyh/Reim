@@ -376,7 +376,7 @@ export const TraiAssistant = ({
       )}
 
       {/* Input */}
-      <div className="p-3 border-t border-border/30 bg-card/50">
+      <div className="flex-shrink-0 p-3 border-t border-border/30 bg-card/50">
         <form onSubmit={handleSubmit} className="flex gap-2">
           <Input
             ref={inputRef}
