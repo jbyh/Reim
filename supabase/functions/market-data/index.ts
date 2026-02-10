@@ -262,7 +262,7 @@ serve(async (req) => {
     // Submit order to Alpaca
     if (action === 'submit_order') {
       if (!alpacaHeaders) throw new Error('Alpaca credentials required');
-      
+      const { orderSymbol, qty, side, type, limitPrice, stopLoss, takeProfit } = body;
       if (!orderSymbol || !qty || !side) {
         throw new Error('Missing required order parameters: symbol, qty, side');
       }
