@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { decryptApiKey } from "../_shared/crypto.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -86,6 +88,20 @@ Rules:
 - For crypto: no bracket orders (stop loss/take profit) - just use market or limit orders.
 - Use 💡 for insights, ⚠️ for risks, 📊 for data, ₿ for crypto.`;
 
+// Retry wrapper for fetch with exponential backoff
+async function fetchWithRetry(url: string, options: RequestInit, retries = 2): Promise<Response> {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      return res;
+    } catch (err) {
+      if (i === retries) throw err;
+      await new Promise(r => setTimeout(r, 500 * (i + 1)));
+    }
+  }
+  throw new Error('Unreachable');
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -97,14 +113,44 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    // Alpaca credentials for fetching additional quotes
-    const ALPACA_API_KEY = Deno.env.get('ALPACA_API_KEY')?.trim();
-    const ALPACA_API_SECRET = Deno.env.get('ALPACA_API_SECRET')?.trim();
+    // --- Resolve the user's own Alpaca credentials ---
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    let ALPACA_API_KEY: string | null = null;
+    let ALPACA_API_SECRET: string | null = null;
+
+    const authHeader = req.headers.get('Authorization');
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      try {
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('alpaca_api_key_encrypted, alpaca_secret_key_encrypted')
+            .eq('user_id', user.id)
+            .single();
+
+          if (profile?.alpaca_api_key_encrypted && profile?.alpaca_secret_key_encrypted) {
+            ALPACA_API_KEY = await decryptApiKey(profile.alpaca_api_key_encrypted, user.id);
+            ALPACA_API_SECRET = await decryptApiKey(profile.alpaca_secret_key_encrypted, user.id);
+          }
+        }
+      } catch (authErr) {
+        console.log('Auth lookup failed, falling back to env vars:', authErr);
+      }
+    }
+
+    // Fallback to env vars
+    if (!ALPACA_API_KEY) ALPACA_API_KEY = Deno.env.get('ALPACA_API_KEY')?.trim() || null;
+    if (!ALPACA_API_SECRET) ALPACA_API_SECRET = Deno.env.get('ALPACA_API_SECRET')?.trim() || null;
 
     const { messages, portfolioContext } = await req.json();
 
     // Extract any symbols mentioned in the last user message that we should fetch quotes for
-    const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+    const lastUserMessage = [...messages].reverse().find((m: any) => m.role === 'user')?.content || '';
     const lowerMessage = lastUserMessage.toLowerCase();
     
     // Extract stock symbols (uppercase 2-5 letter words)
@@ -146,8 +192,8 @@ serve(async (req) => {
           const symbolsParam = [...new Set(newStockSymbols)].slice(0, 5).join(',');
 
           const [tradesRes, quotesRes] = await Promise.all([
-            fetch(`${ALPACA_DATA_URL}/stocks/trades/latest?symbols=${symbolsParam}`, { headers: alpacaHeaders }),
-            fetch(`${ALPACA_DATA_URL}/stocks/quotes/latest?symbols=${symbolsParam}`, { headers: alpacaHeaders })
+            fetchWithRetry(`${ALPACA_DATA_URL}/stocks/trades/latest?symbols=${symbolsParam}`, { headers: alpacaHeaders }),
+            fetchWithRetry(`${ALPACA_DATA_URL}/stocks/quotes/latest?symbols=${symbolsParam}`, { headers: alpacaHeaders })
           ]);
 
           if (tradesRes.ok && quotesRes.ok) {
@@ -177,8 +223,8 @@ serve(async (req) => {
           const cryptoSymbolsParam = [...new Set(cryptoSymbols)].slice(0, 5).join(',');
 
           const [tradesRes, quotesRes] = await Promise.all([
-            fetch(`${ALPACA_CRYPTO_URL}/latest/trades?symbols=${cryptoSymbolsParam}`, { headers: alpacaHeaders }),
-            fetch(`${ALPACA_CRYPTO_URL}/latest/quotes?symbols=${cryptoSymbolsParam}`, { headers: alpacaHeaders })
+            fetchWithRetry(`${ALPACA_CRYPTO_URL}/latest/trades?symbols=${cryptoSymbolsParam}`, { headers: alpacaHeaders }),
+            fetchWithRetry(`${ALPACA_CRYPTO_URL}/latest/quotes?symbols=${cryptoSymbolsParam}`, { headers: alpacaHeaders })
           ]);
 
           if (tradesRes.ok && quotesRes.ok) {

@@ -54,7 +54,7 @@ export const ChatPanel = ({
   ];
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Header */}
       <div className="p-5 border-b border-border/30 bg-gradient-radial">
         <div className="flex items-center gap-4">
@@ -69,7 +69,7 @@ export const ChatPanel = ({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-5">
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-5 min-h-0">
         {messages.map((message, index) => (
           <div
             key={message.id}

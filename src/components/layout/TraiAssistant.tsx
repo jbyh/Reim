@@ -245,9 +245,9 @@ export const TraiAssistant = ({
 
   // Chat content component - shared between overlay and full page
   const ChatContent = ({ className = '' }: { className?: string }) => (
-    <div className={cn("flex flex-col h-full", className)}>
+    <div className={cn("flex flex-col h-full min-h-0", className)}>
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 md:p-4 space-y-3 min-h-0">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-4">
             <div className="w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
@@ -581,7 +581,7 @@ export const TraiAssistant = ({
         // Desktop: bottom right panel
         "md:bottom-4 md:right-4 md:w-[400px] md:h-[550px]"
       )}>
-        <div className="pointer-events-auto h-full glass-card md:rounded-2xl border-t md:border border-primary/20 shadow-2xl flex flex-col overflow-hidden bg-background/95 backdrop-blur-xl">
+        <div className="pointer-events-auto h-full glass-card md:rounded-2xl border-t md:border border-primary/20 shadow-2xl flex flex-col overflow-hidden bg-background/95 backdrop-blur-xl min-h-0">
           {/* Header */}
           <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-border/30">
             <div className="flex items-center gap-2">

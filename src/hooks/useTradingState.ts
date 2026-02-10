@@ -275,13 +275,11 @@ export const useTradingState = () => {
       const parsed = JSON.parse(jsonMatch[1]);
       if (parsed.type !== 'order_intent') return null;
 
-      // For crypto, we might not have it in watchlist yet, so just validate the symbol format
+      // Validate the symbol - accept any reasonable symbol (watchlist, crypto, or valid stock ticker)
       const symbol = parsed.symbol;
-      const isInWatchlist = watchlist.find((s) => s.symbol === symbol);
-      const isCrypto = isCryptoSymbol(symbol);
-      
-      // Allow the order if it's in watchlist OR it's a valid crypto symbol
-      if (!isInWatchlist && !isCrypto) return null;
+      if (!symbol || typeof symbol !== 'string' || symbol.length < 1 || symbol.length > 10) return null;
+
+      const symbolIsCrypto = isCryptoSymbol(symbol);
 
       return {
         symbol: parsed.symbol,
@@ -289,8 +287,8 @@ export const useTradingState = () => {
         side: parsed.side,
         type: parsed.orderType || 'market',
         limitPrice: parsed.suggestions?.limitPrice,
-        stopLoss: isCrypto ? undefined : parsed.suggestions?.stopLoss, // No bracket orders for crypto
-        takeProfit: isCrypto ? undefined : parsed.suggestions?.takeProfit,
+        stopLoss: symbolIsCrypto ? undefined : parsed.suggestions?.stopLoss,
+        takeProfit: symbolIsCrypto ? undefined : parsed.suggestions?.takeProfit,
       };
     } catch {
       return null;
