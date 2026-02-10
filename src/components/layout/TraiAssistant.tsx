@@ -137,14 +137,16 @@ export const TraiAssistant = ({
   }, [currentTab, currentSymbol, positions, pendingOrder]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
   };
 
   useEffect(() => {
     if (expansionState !== 'collapsed' || isFullPage) {
       scrollToBottom();
     }
-  }, [messages, expansionState, isFullPage]);
+  }, [messages, pendingOrder, expansionState, isFullPage]);
 
   useEffect(() => {
     if (orderStatus === 'confirmed') {
