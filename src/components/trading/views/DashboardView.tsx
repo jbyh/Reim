@@ -32,10 +32,10 @@ export const DashboardView = ({
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="p-4 lg:p-6">
         {/* Bento Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 lg:gap-5 auto-rows-min">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 lg:gap-5 auto-rows-min">
           
           {/* Portfolio Chart - Large card spanning 8 cols */}
-          <div className="md:col-span-2 xl:col-span-8 row-span-1">
+          <div className="md:col-span-2 lg:col-span-8 row-span-1">
             <PortfolioValueChart portfolio={portfolio} />
           </div>
 
