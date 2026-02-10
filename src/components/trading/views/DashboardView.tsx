@@ -116,7 +116,7 @@ export const DashboardView = ({
           </div>
 
           {/* Top Movers - 4 cols */}
-          <div className="md:col-span-1 xl:col-span-4">
+          <div className="md:col-span-1 lg:col-span-4">
             <TopMovers watchlist={watchlist} />
           </div>
 
