@@ -12,11 +12,12 @@ const ALPACA_CRYPTO_URL = 'https://data.alpaca.markets/v1beta3/crypto/us';
 
 // Simple in-memory cache to reduce API calls and prevent rate limiting
 const cache: Map<string, { data: any; timestamp: number }> = new Map();
-const CACHE_TTL_MS = 15000; // 15 second cache for market data to prevent rate limiting
+const CACHE_TTL_MS = 30000; // 30 second cache to prevent rate limiting
+const STALE_TTL_MS = 300000; // 5 min stale cache for fallback on errors
 
 // Track last request time to enforce minimum delay between API calls
 let lastApiCallTime = 0;
-const MIN_API_DELAY_MS = 2000; // Minimum 2 seconds between API calls
+const MIN_API_DELAY_MS = 3000; // Minimum 3 seconds between API calls
 
 const getCached = (key: string): any | null => {
   const cached = cache.get(key);
