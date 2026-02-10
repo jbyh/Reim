@@ -272,20 +272,25 @@ serve(async (req) => {
 
     // Get orders
     if (action === 'orders') {
+      cacheKey = 'orders';
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const url = new URL(`${ALPACA_TRADING_URL}/orders`);
       url.searchParams.set('status', 'all');
       url.searchParams.set('limit', '50');
       url.searchParams.set('direction', 'desc');
-      
-      const response = await fetch(url.toString(), {
-        headers: alpacaHeaders,
-      });
+      const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Alpaca orders error:', response.status, errorText);
         throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
