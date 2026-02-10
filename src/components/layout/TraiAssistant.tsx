@@ -402,7 +402,7 @@ export const TraiAssistant = ({
   // If this is the full page mode (dedicated chat tab), render full page experience
   if (isFullPage) {
     return (
-      <div className="h-full flex flex-col bg-background">
+      <div className="h-full flex flex-col bg-background overflow-hidden">
         <ConfirmationToast />
         {/* Full page header */}
         <div className="flex items-center justify-between p-4 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
