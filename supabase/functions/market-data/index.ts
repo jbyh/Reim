@@ -428,7 +428,7 @@ serve(async (req) => {
       );
 
       // Fetch latest crypto quotes
-      const cryptoQuotesResponse = await fetch(
+      const cryptoQuotesResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/latest/quotes?symbols=${cryptoSymbolsParam}`,
         { headers: alpacaHeaders }
       );
