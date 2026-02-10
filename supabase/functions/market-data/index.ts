@@ -94,23 +94,35 @@ serve(async (req) => {
 
     if (authHeader) {
       const token = authHeader.replace('Bearer ', '');
-      const { data: { user } } = await supabase.auth.getUser(token);
       
-      if (user) {
-        userId = user.id;
-        
-        // Fetch user's encrypted Alpaca credentials from their profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('alpaca_api_key_encrypted, alpaca_secret_key_encrypted, alpaca_paper_trading')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (profile?.alpaca_api_key_encrypted && profile?.alpaca_secret_key_encrypted) {
-          // Decrypt the keys
-          userAlpacaKey = await decryptApiKey(profile.alpaca_api_key_encrypted, user.id);
-          userAlpacaSecret = await decryptApiKey(profile.alpaca_secret_key_encrypted, user.id);
-          paperTrading = profile.alpaca_paper_trading ?? true;
+      // Retry auth lookup up to 2 times (connection resets are transient)
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser(token);
+          
+          if (user) {
+            userId = user.id;
+            
+            // Fetch user's encrypted Alpaca credentials from their profile
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('alpaca_api_key_encrypted, alpaca_secret_key_encrypted, alpaca_paper_trading')
+              .eq('user_id', user.id)
+              .single();
+            
+            if (profile?.alpaca_api_key_encrypted && profile?.alpaca_secret_key_encrypted) {
+              // Decrypt the keys
+              userAlpacaKey = await decryptApiKey(profile.alpaca_api_key_encrypted, user.id);
+              userAlpacaSecret = await decryptApiKey(profile.alpaca_secret_key_encrypted, user.id);
+              paperTrading = profile.alpaca_paper_trading ?? true;
+            }
+          }
+          break; // Success, exit retry loop
+        } catch (authErr) {
+          console.error(`Auth attempt ${attempt + 1} failed:`, authErr);
+          if (attempt < 2) {
+            await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+          }
         }
       }
     }
