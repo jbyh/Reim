@@ -490,22 +490,40 @@ serve(async (req) => {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-
-    // Alpaca uses 401 for invalid/expired keys or wrong environment (paper vs live)
     const isUnauthorized = msg.includes('401') || msg.includes('Authorization');
-
-    console.error('Market data error:', error);
-
     const isRateLimited = msg.includes('429') || msg.toLowerCase().includes('too many requests');
+    const isConnectionError = msg.includes('CONNECTION_ERROR') || msg.includes('connection closed');
 
-    // If rate limited, prefer returning cached/stale data instead of throwing 500 (prevents blank screen)
-    if (isRateLimited && cacheKey) {
-      const cached = getCached(cacheKey);
+    console.error('Market data error:', msg);
+
+    // For rate limits or connection errors, return stale cached data to prevent blank screen
+    if ((isRateLimited || isConnectionError) && cacheKey) {
+      const stale = getStaleCached(cacheKey);
+      if (stale) {
+        return new Response(
+          JSON.stringify({
+            data: stale,
+            rateLimited: isRateLimited,
+            stale: true,
+            error: isRateLimited
+              ? 'Rate limited by data provider. Showing last known data.'
+              : 'Connection issue. Showing last known data.',
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+    }
+
+    // For rate limits without cache, still return 200 with empty data to prevent blank screen
+    if (isRateLimited || isConnectionError) {
       return new Response(
         JSON.stringify({
-          data: cached || {},
-          rateLimited: true,
-          error: 'Rate limited by data provider. Showing last known prices.',
+          data: {},
+          rateLimited: isRateLimited,
+          error: 'Temporarily unable to fetch data. Will retry shortly.',
         }),
         {
           status: 200,
