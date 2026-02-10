@@ -144,49 +144,66 @@ serve(async (req) => {
 
     // Route to different handlers based on action
     if (action === 'account') {
-      const response = await fetch(`${ALPACA_TRADING_URL}/account`, {
-        headers: alpacaHeaders,
-      });
+      cacheKey = 'account';
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const response = await safeFetch(`${ALPACA_TRADING_URL}/account`, { headers: alpacaHeaders });
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Alpaca account error:', response.status, errorText);
         throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'positions') {
-      const response = await fetch(`${ALPACA_TRADING_URL}/positions`, {
-        headers: alpacaHeaders,
-      });
+      cacheKey = 'positions';
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const response = await safeFetch(`${ALPACA_TRADING_URL}/positions`, { headers: alpacaHeaders });
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Alpaca positions error:', response.status, errorText);
         throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'activities') {
+      cacheKey = 'activities';
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const url = new URL(`${ALPACA_TRADING_URL}/account/activities`);
       url.searchParams.set('direction', 'desc');
       url.searchParams.set('page_size', '100');
-      
-      const response = await fetch(url.toString(), {
-        headers: alpacaHeaders,
-      });
+      const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Alpaca activities error:', response.status, errorText);
         throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
       }
       const data = await response.json();
+      setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
