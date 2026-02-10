@@ -136,8 +136,10 @@ serve(async (req) => {
       ? 'https://paper-api.alpaca.markets/v2'
       : 'https://api.alpaca.markets/v2';
 
-    if (!ALPACA_API_KEY || !ALPACA_API_SECRET) {
-      throw new Error('Alpaca API credentials not configured. Please add your API keys in Settings.');
+    const hasAlpacaCredentials = !!(ALPACA_API_KEY && ALPACA_API_SECRET);
+
+    if (!hasAlpacaCredentials && action && ['account', 'positions', 'activities', 'submit_order', 'orders'].includes(action)) {
+      throw new Error('Alpaca API credentials not configured. Please add your API keys in Settings to trade.');
     }
 
     // Guard against accidentally pasting labels like "ALPACA_API_KEY=..."
