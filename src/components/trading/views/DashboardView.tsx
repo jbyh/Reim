@@ -126,7 +126,7 @@ export const DashboardView = ({
           </div>
 
           {/* Quick Actions - 7 cols */}
-          <div className="md:col-span-2 xl:col-span-7">
+          <div className="md:col-span-2 lg:col-span-7">
             <div className="glass-card rounded-2xl p-4 lg:p-5">
               <h3 className="font-semibold text-foreground mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

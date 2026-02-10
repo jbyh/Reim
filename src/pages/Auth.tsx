@@ -31,7 +31,10 @@ export const Auth = () => {
       toast.error(error.message);
     } else {
       toast.success('Welcome back!');
-      navigate('/');
+      // Redirect based on whether Alpaca keys are configured
+      // Need to re-check after sign-in since hasAlpacaCredentials may not be updated yet
+      // The profile fetch happens async, so redirect to profile for onboarding check
+      navigate('/profile?onboarding=true');
     }
   };
 
@@ -53,8 +56,7 @@ export const Auth = () => {
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success('Account created! You can now sign in.');
-      navigate('/');
+      toast.success('Account created! Please check your email to verify, then sign in.');
     }
   };
 
