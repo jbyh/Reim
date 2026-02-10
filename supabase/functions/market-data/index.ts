@@ -422,7 +422,7 @@ serve(async (req) => {
       const cryptoSymbolsParam = cryptoSymbols.join(',');
       
       // Fetch latest crypto trades
-      const cryptoTradesResponse = await fetch(
+      const cryptoTradesResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/latest/trades?symbols=${cryptoSymbolsParam}`,
         { headers: alpacaHeaders }
       );
