@@ -324,6 +324,7 @@ serve(async (req) => {
 
     // Get orders
     if (action === 'orders') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
       cacheKey = 'orders';
       const cached = getCached(cacheKey);
       if (cached) {
