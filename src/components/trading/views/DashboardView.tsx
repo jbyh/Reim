@@ -120,8 +120,8 @@ export const DashboardView = ({
             <TopMovers watchlist={watchlist} />
           </div>
 
-          {/* Pending Orders - Full width on small, 5 cols on xl */}
-          <div className="md:col-span-2 xl:col-span-5">
+          {/* Pending Orders - Full width on small, 5 cols on lg */}
+          <div className="md:col-span-2 lg:col-span-5">
             <PendingOrders orders={orders} />
           </div>
 
