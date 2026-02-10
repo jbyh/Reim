@@ -32,15 +32,15 @@ export const DashboardView = ({
     <div className="h-full overflow-y-auto scrollbar-thin">
       <div className="p-4 lg:p-6">
         {/* Bento Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 lg:gap-5 auto-rows-min">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 lg:gap-5 auto-rows-min">
           
           {/* Portfolio Chart - Large card spanning 8 cols */}
-          <div className="md:col-span-2 xl:col-span-8 row-span-1">
+          <div className="md:col-span-2 lg:col-span-8 row-span-1">
             <PortfolioValueChart portfolio={portfolio} />
           </div>
 
           {/* Trai Greeting - 4 cols on right */}
-          <div className="md:col-span-1 xl:col-span-4 row-span-1">
+          <div className="md:col-span-2 lg:col-span-4 row-span-1">
             <TraiGreeting 
               portfolio={portfolio} 
               positions={positions}
@@ -50,7 +50,7 @@ export const DashboardView = ({
           </div>
 
           {/* Positions Card - 5 cols */}
-          <div className="md:col-span-1 xl:col-span-5">
+          <div className="md:col-span-2 lg:col-span-5">
             <div className="glass-card rounded-2xl overflow-hidden h-full">
               <div className="p-4 lg:p-5 border-b border-border/40 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -111,22 +111,22 @@ export const DashboardView = ({
           </div>
 
           {/* Market Countdown - 3 cols */}
-          <div className="md:col-span-1 xl:col-span-3">
+          <div className="md:col-span-1 lg:col-span-3">
             <MarketCountdown onGoToFloor={() => onNavigate('floor')} />
           </div>
 
           {/* Top Movers - 4 cols */}
-          <div className="md:col-span-1 xl:col-span-4">
+          <div className="md:col-span-1 lg:col-span-4">
             <TopMovers watchlist={watchlist} />
           </div>
 
-          {/* Pending Orders - Full width on small, 5 cols on xl */}
-          <div className="md:col-span-2 xl:col-span-5">
+          {/* Pending Orders - Full width on small, 5 cols on lg */}
+          <div className="md:col-span-2 lg:col-span-5">
             <PendingOrders orders={orders} />
           </div>
 
           {/* Quick Actions - 7 cols */}
-          <div className="md:col-span-2 xl:col-span-7">
+          <div className="md:col-span-2 lg:col-span-7">
             <div className="glass-card rounded-2xl p-4 lg:p-5">
               <h3 className="font-semibold text-foreground mb-4">Quick Actions</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
