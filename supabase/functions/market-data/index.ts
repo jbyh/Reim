@@ -27,16 +27,33 @@ const getCached = (key: string): any | null => {
   return null;
 };
 
+// Return stale data (up to 5 min old) as fallback during errors
+const getStaleCached = (key: string): any | null => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < STALE_TTL_MS) {
+    return cached.data;
+  }
+  return null;
+};
+
 const setCache = (key: string, data: any): void => {
   cache.set(key, { data, timestamp: Date.now() });
-  // Cleanup old entries periodically
-  if (cache.size > 100) {
+  if (cache.size > 200) {
     const now = Date.now();
     for (const [k, v] of cache) {
-      if (now - v.timestamp > CACHE_TTL_MS * 2) {
+      if (now - v.timestamp > STALE_TTL_MS) {
         cache.delete(k);
       }
     }
+  }
+};
+
+// Safe fetch wrapper that catches connection errors
+const safeFetch = async (url: string, options: RequestInit): Promise<Response> => {
+  try {
+    return await fetch(url, options);
+  } catch (err) {
+    throw new Error(`CONNECTION_ERROR: ${err instanceof Error ? err.message : 'Network error'}`);
   }
 };
 
