@@ -111,7 +111,7 @@ export const DashboardView = ({
           </div>
 
           {/* Market Countdown - 3 cols */}
-          <div className="md:col-span-1 xl:col-span-3">
+          <div className="md:col-span-1 lg:col-span-3">
             <MarketCountdown onGoToFloor={() => onNavigate('floor')} />
           </div>
 
