@@ -246,163 +246,183 @@ export const TraiAssistant = ({
   };
 
   // Chat content component - shared between overlay and full page
-  const ChatContent = ({ className = '' }: { className?: string }) => (
-    <div className={cn("flex flex-col min-h-0 overflow-hidden", className)}>
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto overscroll-contain scrollbar-thin p-3 md:p-4 space-y-3 min-h-0">
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-4">
-            <div className="w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
-              <Sparkles className="h-7 w-7 text-white" />
-            </div>
-            <h3 className="font-bold text-base text-foreground mb-2">Hey! I'm Trai</h3>
-            <p className="text-xs text-muted-foreground mb-4 max-w-[260px]">
-              Your AI trading companion. I can analyze markets, suggest trades, and help you make smarter decisions.
-            </p>
-            <div className="w-full space-y-2">
-              {quickActions.map((qa) => (
-                <button
-                  key={qa.label}
-                  onClick={() => handleQuickAction(qa.action)}
-                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left group"
-                >
-                  <div className="flex items-center gap-2">
-                    <qa.icon className={cn(
-                      "h-4 w-4",
-                      qa.variant === 'primary' && "text-primary",
-                      qa.variant === 'success' && "text-success",
-                      qa.variant === 'warning' && "text-warning"
-                    )} />
-                    <span className="text-xs text-foreground">{qa.label}</span>
+  // Uses absolute positioning for the scroll area to avoid mobile Safari flex bugs
+  const ChatContent = ({ className = '' }: { className?: string }) => {
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      const el = scrollContainerRef.current;
+      if (el) {
+        requestAnimationFrame(() => {
+          el.scrollTop = el.scrollHeight;
+        });
+      }
+    }, [messages, pendingOrder, isLoading]);
+
+    return (
+      <div className={cn("flex flex-col", className)} style={{ minHeight: 0 }}>
+        {/* Messages - relative wrapper with absolute scrollable child */}
+        <div className="relative flex-1" style={{ minHeight: 0 }}>
+          <div
+            ref={scrollContainerRef}
+            className="absolute inset-0 overflow-y-auto overscroll-contain p-3 md:p-4 space-y-3"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center p-4" style={{ minHeight: '100%' }}>
+                <div className="w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
+                  <Sparkles className="h-7 w-7 text-white" />
+                </div>
+                <h3 className="font-bold text-base text-foreground mb-2">Hey! I'm Trai</h3>
+                <p className="text-xs text-muted-foreground mb-4 max-w-[260px]">
+                  Your AI trading companion. I can analyze markets, suggest trades, and help you make smarter decisions.
+                </p>
+                <div className="w-full space-y-2 max-w-[280px]">
+                  {quickActions.map((qa) => (
+                    <button
+                      key={qa.label}
+                      onClick={() => handleQuickAction(qa.action)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <qa.icon className={cn(
+                          "h-4 w-4",
+                          qa.variant === 'primary' && "text-primary",
+                          qa.variant === 'success' && "text-success",
+                          qa.variant === 'warning' && "text-warning"
+                        )} />
+                        <span className="text-xs text-foreground">{qa.label}</span>
+                      </div>
+                      <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={cn(
+                      'flex gap-2',
+                      message.role === 'user' ? 'flex-row-reverse' : ''
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center',
+                        message.role === 'assistant' ? 'gradient-purple' : 'bg-primary/20'
+                      )}
+                    >
+                      {message.role === 'assistant' ? (
+                        <Bot className="h-3.5 w-3.5 text-white" />
+                      ) : (
+                        <User className="h-3.5 w-3.5 text-primary" />
+                      )}
+                    </div>
+                    
+                    <div
+                      className={cn(
+                        'max-w-[85%]',
+                        message.role === 'assistant' ? 'chat-bubble-ai' : 'chat-bubble-user'
+                      )}
+                    >
+                      {message.role === 'assistant' ? (
+                        message.content ? (
+                          <AIMessageRenderer content={message.content} watchlist={watchlist} />
+                        ) : isLoading ? (
+                          <span className="flex items-center gap-2 text-xs">
+                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                            <span className="text-muted-foreground">Thinking...</span>
+                          </span>
+                        ) : null
+                      ) : (
+                        <p className="text-xs whitespace-pre-wrap">{message.content}</p>
+                      )}
+                      {message.content && (
+                        <p className="text-[9px] mt-1.5 text-muted-foreground/60">
+                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
-                </button>
-              ))}
-            </div>
+                ))}
+
+                {/* Order Confirmation */}
+                {pendingOrder && (
+                  <div className="max-w-[90%] ml-9 animate-in slide-in-from-bottom-4 duration-300">
+                    <div className="mb-1.5 flex items-center gap-1.5">
+                      <Clock className="h-3 w-3 text-warning" />
+                      <span className="text-xs font-medium text-warning">Order Awaiting Confirmation</span>
+                    </div>
+                    <TradeTicketWidget
+                      order={pendingOrder}
+                      stock={watchlist.find((s) => s.symbol === pendingOrder.symbol)}
+                      onConfirm={onConfirmOrder}
+                      onCancel={onCancelOrder}
+                      showActions={true}
+                      isSubmitting={orderStatus === 'submitting'}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+            <div className="h-1" />
           </div>
-        ) : (
-          <>
-            {messages.map((message) => (
-              <div
-                key={message.id}
+        </div>
+
+        {/* Quick Actions - When messages exist */}
+        {messages.length > 0 && (
+          <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
+            {quickActions.map((qa) => (
+              <button
+                key={qa.label}
+                onClick={() => handleQuickAction(qa.action)}
+                disabled={isLoading}
                 className={cn(
-                  'flex gap-2',
-                  message.role === 'user' ? 'flex-row-reverse' : ''
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all",
+                  "border bg-secondary/30 hover:bg-secondary",
+                  qa.variant === 'primary' && "border-primary/30 text-primary",
+                  qa.variant === 'success' && "border-success/30 text-success",
+                  qa.variant === 'warning' && "border-warning/30 text-warning"
                 )}
               >
-                <div
-                  className={cn(
-                    'flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center',
-                    message.role === 'assistant' ? 'gradient-purple' : 'bg-primary/20'
-                  )}
-                >
-                  {message.role === 'assistant' ? (
-                    <Bot className="h-3.5 w-3.5 text-white" />
-                  ) : (
-                    <User className="h-3.5 w-3.5 text-primary" />
-                  )}
-                </div>
-                
-                <div
-                  className={cn(
-                    'max-w-[85%]',
-                    message.role === 'assistant' ? 'chat-bubble-ai' : 'chat-bubble-user'
-                  )}
-                >
-                  {message.role === 'assistant' ? (
-                    message.content ? (
-                      <AIMessageRenderer content={message.content} watchlist={watchlist} />
-                    ) : isLoading ? (
-                      <span className="flex items-center gap-2 text-xs">
-                        <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                        <span className="text-muted-foreground">Thinking...</span>
-                      </span>
-                    ) : null
-                  ) : (
-                    <p className="text-xs whitespace-pre-wrap">{message.content}</p>
-                  )}
-                  {message.content && (
-                    <p className="text-[9px] mt-1.5 text-muted-foreground/60">
-                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  )}
-                </div>
-              </div>
+                <qa.icon className="h-3 w-3" />
+                {qa.label}
+              </button>
             ))}
-
-            {/* Order Confirmation */}
-            {pendingOrder && (
-              <div className="max-w-[90%] ml-9 animate-in slide-in-from-bottom-4 duration-300">
-                <div className="mb-1.5 flex items-center gap-1.5">
-                  <Clock className="h-3 w-3 text-warning" />
-                  <span className="text-xs font-medium text-warning">Order Awaiting Confirmation</span>
-                </div>
-                <TradeTicketWidget
-                  order={pendingOrder}
-                  stock={watchlist.find((s) => s.symbol === pendingOrder.symbol)}
-                  onConfirm={onConfirmOrder}
-                  onCancel={onCancelOrder}
-                  showActions={true}
-                  isSubmitting={orderStatus === 'submitting'}
-                />
-              </div>
-            )}
-          </>
+          </div>
         )}
-        <div ref={messagesEndRef} />
-      </div>
 
-      {/* Quick Actions - When messages exist */}
-      {messages.length > 0 && (
-        <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
-          {quickActions.map((qa) => (
-            <button
-              key={qa.label}
-              onClick={() => handleQuickAction(qa.action)}
+        {/* Input */}
+        <div className="flex-shrink-0 p-3 border-t border-border/30 bg-card/50">
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <Input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask Trai anything..."
+              className="flex-1 h-10 bg-input border-border/50 rounded-xl text-sm"
               disabled={isLoading}
-              className={cn(
-                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all",
-                "border bg-secondary/30 hover:bg-secondary",
-                qa.variant === 'primary' && "border-primary/30 text-primary",
-                qa.variant === 'success' && "border-success/30 text-success",
-                qa.variant === 'warning' && "border-warning/30 text-warning"
-              )}
+            />
+            <Button 
+              type="submit" 
+              size="icon"
+              disabled={!input.trim() || isLoading}
+              className="h-10 w-10 rounded-xl bg-primary hover:bg-primary/90 glow-primary"
             >
-              <qa.icon className="h-3 w-3" />
-              {qa.label}
-            </button>
-          ))}
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </form>
         </div>
-      )}
-
-      {/* Input */}
-      <div className="flex-shrink-0 p-3 border-t border-border/30 bg-card/50">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <Input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask Trai anything..."
-            className="flex-1 h-10 bg-input border-border/50 rounded-xl text-sm"
-            disabled={isLoading}
-          />
-          <Button 
-            type="submit" 
-            size="icon"
-            disabled={!input.trim() || isLoading}
-            className="h-10 w-10 rounded-xl bg-primary hover:bg-primary/90 glow-primary"
-          >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
-        </form>
       </div>
-    </div>
-  );
+    );
+  };
 
   // If this is the full page mode (dedicated chat tab), render full page experience
   if (isFullPage) {
     return (
-      <div className="h-full flex flex-col bg-background overflow-hidden">
+      <div className="h-dvh flex flex-col bg-background overflow-hidden">
         <ConfirmationToast />
         {/* Full page header */}
         <div className="flex items-center justify-between p-4 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
@@ -583,7 +603,7 @@ export const TraiAssistant = ({
         // Desktop: bottom right panel
         "md:bottom-4 md:right-4 md:w-[400px] md:h-[550px]"
       )}>
-        <div className="pointer-events-auto h-full glass-card md:rounded-2xl border-t md:border border-primary/20 shadow-2xl flex flex-col overflow-hidden bg-background/95 backdrop-blur-xl" style={{ maxHeight: '100dvh' }}>
+        <div className="pointer-events-auto h-full glass-card md:rounded-2xl border-t md:border border-primary/20 shadow-2xl flex flex-col overflow-hidden bg-background/95 backdrop-blur-xl" style={{ height: '100dvh', maxHeight: '100dvh' }}>
           {/* Header */}
           <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-border/30">
             <div className="flex items-center gap-2">
