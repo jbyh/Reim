@@ -138,7 +138,10 @@ serve(async (req) => {
 
     const hasAlpacaCredentials = !!(ALPACA_API_KEY && ALPACA_API_SECRET);
 
-    if (!hasAlpacaCredentials && action && ['account', 'positions', 'activities', 'submit_order', 'orders'].includes(action)) {
+    const body = await req.json();
+    const { action, symbols, symbol, timeframe, start, end } = body;
+
+    if (!hasAlpacaCredentials && action && ['account', 'positions', 'activities', 'submit_order', 'submit_options_order', 'orders'].includes(action)) {
       throw new Error('Alpaca API credentials not configured. Please add your API keys in Settings to trade.');
     }
 
@@ -152,9 +155,6 @@ serve(async (req) => {
       'APCA-API-SECRET-KEY': ALPACA_API_SECRET!,
       'Accept': 'application/json',
     } : null;
-
-    const body = await req.json();
-    const { action, symbols, symbol, timeframe, start, end } = body;
 
     // --- Free fallback: Yahoo Finance for quotes when no Alpaca creds ---
     async function fetchYahooQuotes(syms: string[]): Promise<Record<string, any>> {
@@ -345,6 +345,114 @@ serve(async (req) => {
       const data = await response.json();
       setCache(cacheKey, data);
       return new Response(JSON.stringify({ data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Fetch options chain snapshots from Alpaca
+    if (action === 'options_chain') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required for options data. Connect your brokerage in Settings.');
+      const underlying = body.underlying_symbol;
+      if (!underlying) throw new Error('underlying_symbol is required');
+      
+      cacheKey = `options_chain:${underlying}:${body.expiration_date || ''}:${body.type || ''}`;
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const url = new URL(`https://data.alpaca.markets/v1beta1/options/snapshots/${underlying}`);
+      url.searchParams.set('feed', 'indicative');
+      url.searchParams.set('limit', '100');
+      if (body.expiration_date) url.searchParams.set('expiration_date', body.expiration_date);
+      if (body.type) url.searchParams.set('type', body.type);
+      if (body.strike_price_gte) url.searchParams.set('strike_price_gte', String(body.strike_price_gte));
+      if (body.strike_price_lte) url.searchParams.set('strike_price_lte', String(body.strike_price_lte));
+
+      const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Alpaca options chain error:', response.status, errorText);
+        throw new Error(`Alpaca options API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      
+      // Parse snapshots into a cleaner format
+      const snapshots = data.snapshots || {};
+      const contracts: Record<string, any> = {};
+      for (const [occSymbol, snap] of Object.entries(snapshots)) {
+        const s = snap as any;
+        const quote = s.latestQuote || {};
+        const trade = s.latestTrade || {};
+        const greeks = s.greeks || {};
+        contracts[occSymbol] = {
+          symbol: occSymbol,
+          bid: quote.bp || 0,
+          ask: quote.ap || 0,
+          bidSize: quote.bs || 0,
+          askSize: quote.as || 0,
+          lastPrice: trade.p || 0,
+          volume: trade.s || 0,
+          openInterest: s.openInterest || 0,
+          impliedVolatility: s.impliedVolatility || greeks.iv || 0,
+          greeks: {
+            delta: greeks.delta || 0,
+            gamma: greeks.gamma || 0,
+            theta: greeks.theta || 0,
+            vega: greeks.vega || 0,
+          },
+        };
+      }
+      
+      setCache(cacheKey, contracts);
+      return new Response(JSON.stringify({ data: contracts }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Submit options order to Alpaca
+    if (action === 'submit_options_order') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
+      const { orderSymbol, qty, side, type: orderType, limitPrice } = body;
+      if (!orderSymbol || !qty || !side) {
+        throw new Error('Missing required order parameters: orderSymbol, qty, side');
+      }
+
+      const orderPayload: Record<string, any> = {
+        symbol: orderSymbol,
+        qty: String(qty),
+        side: side,
+        type: orderType || 'limit',
+        time_in_force: 'day',
+      };
+
+      if (limitPrice) {
+        orderPayload.limit_price = String(limitPrice);
+      }
+
+      console.log('Submitting options order to Alpaca:', orderPayload);
+
+      const response = await safeFetch(`${ALPACA_TRADING_URL}/orders`, {
+        method: 'POST',
+        headers: {
+          ...alpacaHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Alpaca options order error:', response.status, errorText);
+        throw new Error(`Options order failed: ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Options order submitted successfully:', data.id, 'Status:', data.status);
+
+      return new Response(JSON.stringify({ data, success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
