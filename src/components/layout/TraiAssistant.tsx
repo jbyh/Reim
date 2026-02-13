@@ -152,6 +152,16 @@ export const TraiAssistant = ({
     }
   }, [messages, pendingOrder, expansionState, isFullPage]);
 
+  // Auto-focus the chat input when expanding to full (mobile overlay)
+  useEffect(() => {
+    if (expansionState === 'full' && !isSidebar && !isFullPage) {
+      // Wait for the DOM to paint the expanded view, then focus
+      requestAnimationFrame(() => {
+        chatInputRef.current?.focus();
+      });
+    }
+  }, [expansionState, isSidebar, isFullPage]);
+
   useEffect(() => {
     if (orderStatus === 'confirmed') {
       setShowConfirmAnimation(true);
@@ -639,34 +649,15 @@ export const TraiAssistant = ({
               ))}
             </div>
 
-            {/* Input - use a fake button to avoid keyboard bounce on expand */}
-            <div className="p-2 pt-0 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setExpansionState('full');
-                  setTimeout(() => {
-                    chatInputRef.current?.focus();
-                  }, 350);
-                }}
-                className="flex-1 h-9 bg-input/50 border border-border/50 rounded-lg text-xs text-muted-foreground text-left px-3"
-              >
-                Ask Trai anything...
-              </button>
-              <Button 
-                type="button" 
-                size="icon"
-                onClick={() => {
-                  setExpansionState('full');
-                  setTimeout(() => {
-                    chatInputRef.current?.focus();
-                  }, 350);
-                }}
-                className="h-9 w-9 rounded-lg bg-primary hover:bg-primary/90"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
+            {/* Tap to open chat */}
+            <button
+              type="button"
+              onClick={() => setExpansionState('full')}
+              className="mx-2 mb-2 flex items-center gap-2 h-10 px-3 bg-input/50 border border-border/50 rounded-xl text-sm text-muted-foreground hover:bg-input/80 hover:border-primary/30 transition-colors"
+            >
+              <Send className="h-3.5 w-3.5 text-primary" />
+              <span>Message Trai...</span>
+            </button>
           </div>
         </div>
       </>
