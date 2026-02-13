@@ -457,6 +457,61 @@ serve(async (req) => {
       });
     }
 
+    // Fetch news for a symbol from Alpaca
+    if (action === 'news') {
+      const newsSymbol = symbol || symbols?.[0];
+      if (!newsSymbol) throw new Error('Symbol required for news');
+      
+      cacheKey = `news:${newsSymbol}`;
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Alpaca News API is available even on free tier
+      const newsUrl = new URL('https://data.alpaca.markets/v1beta1/news');
+      newsUrl.searchParams.set('symbols', newsSymbol.replace('/USD', ''));
+      newsUrl.searchParams.set('limit', '15');
+      newsUrl.searchParams.set('sort', 'desc');
+
+      const headers = alpacaHeaders || {
+        'APCA-API-KEY-ID': Deno.env.get('ALPACA_API_KEY')?.trim() || '',
+        'APCA-API-SECRET-KEY': Deno.env.get('ALPACA_API_SECRET')?.trim() || '',
+        'Accept': 'application/json',
+      };
+
+      try {
+        const response = await safeFetch(newsUrl.toString(), { headers });
+        if (response.ok) {
+          const json = await response.json();
+          const articles = (json.news || []).map((a: any) => ({
+            id: a.id,
+            headline: a.headline,
+            summary: a.summary,
+            author: a.author,
+            source: a.source,
+            url: a.url,
+            created_at: a.created_at,
+            symbols: a.symbols,
+            sentiment: a.sentiment || null,
+          }));
+          setCache(cacheKey, articles);
+          return new Response(JSON.stringify({ data: articles }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } catch (e) {
+        console.error('News fetch error:', e);
+      }
+
+      // Fallback: empty array
+      return new Response(JSON.stringify({ data: [] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Fetch crypto bars
     if (action === 'crypto_bars' && symbol) {
       if (!alpacaHeaders) throw new Error('Alpaca credentials required for chart data');
