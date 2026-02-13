@@ -187,9 +187,9 @@ export const AppShell = () => {
         </main>
       </div>
 
-      {/* Trai Right Sidebar - hidden on chat tab and mobile */}
+      {/* Trai Right Sidebar - hidden on chat tab and mobile, collapsible */}
       {activeTab !== 'chat' && (
-        <div className="hidden lg:flex h-full w-[340px] xl:w-[380px] flex-shrink-0 border-l border-border/30">
+        <div className="hidden lg:flex h-full flex-shrink-0">
           <TraiAssistant
             messages={messages}
             pendingOrder={pendingOrder}

@@ -1,4 +1,4 @@
-import { Menu, Bell, Settings, LogIn, User } from 'lucide-react';
+import { Menu, Bell, LogIn, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -88,14 +88,6 @@ export const TopBar = ({ activeTab, onMenuClick, onTabChange }: TopBarProps) => 
         {/* Notifications */}
         <button className="p-2 hover:bg-secondary rounded-xl transition-colors relative">
           <Bell className="h-5 w-5 text-muted-foreground" />
-        </button>
-        
-        {/* Settings */}
-        <button 
-          className="p-2 hover:bg-secondary rounded-xl transition-colors"
-          onClick={() => navigate('/profile')}
-        >
-          <Settings className="h-5 w-5 text-muted-foreground" />
         </button>
         
         {/* User avatar / Auth */}
