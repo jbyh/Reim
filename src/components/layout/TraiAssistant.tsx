@@ -48,7 +48,8 @@ interface TraiAssistantProps {
   onConfirmOrder: () => void;
   onCancelOrder: () => void;
   onNavigate: (tab: TabType, symbol?: string) => void;
-  isFullPage?: boolean; // New prop for dedicated page mode
+  isFullPage?: boolean;
+  isSidebar?: boolean;
 }
 
 export const TraiAssistant = ({
@@ -64,7 +65,8 @@ export const TraiAssistant = ({
   onConfirmOrder,
   onCancelOrder,
   onNavigate,
-  isFullPage = false
+  isFullPage = false,
+  isSidebar = false
 }: TraiAssistantProps) => {
   // isExpanded: 'collapsed' | 'half' | 'full' - three states for mobile
   const [expansionState, setExpansionState] = useState<'collapsed' | 'half' | 'full'>('collapsed');
@@ -424,7 +426,6 @@ export const TraiAssistant = ({
     return (
       <div className="h-dvh flex flex-col bg-background overflow-hidden">
         <ConfirmationToast />
-        {/* Full page header */}
         <div className="flex items-center justify-between p-4 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl gradient-purple glow-primary flex items-center justify-center">
@@ -451,6 +452,54 @@ export const TraiAssistant = ({
             </Button>
           </div>
         </div>
+        <ChatContent className="flex-1 min-h-0" />
+      </div>
+    );
+  }
+
+  // Sidebar mode - persistent right panel on desktop
+  if (isSidebar) {
+    return (
+      <div className="h-full flex flex-col bg-card/30 overflow-hidden w-full">
+        <ConfirmationToast />
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl gradient-purple glow-primary flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-sm text-foreground">Trai</p>
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+                Live • {currentTab}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1">
+            <OrderStatusBadge />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              onClick={() => navigate('/profile')}
+              title="Settings"
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Pending Order Alert */}
+        {pendingOrder && (
+          <div className="p-2 bg-warning/10 border-b border-warning/30 flex items-center gap-2">
+            <Clock className="h-3 w-3 text-warning" />
+            <span className="text-[10px] text-foreground">
+              Pending: <strong>{pendingOrder.side.toUpperCase()}</strong> {pendingOrder.qty} {pendingOrder.symbol}
+            </span>
+          </div>
+        )}
+
         <ChatContent className="flex-1 min-h-0" />
       </div>
     );

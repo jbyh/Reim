@@ -47,8 +47,38 @@ export const OptionsSearch = ({ onSymbolChange, currentSymbol }: OptionsSearchPr
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [popularPrices, setPopularPrices] = useState<SearchResult[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
+  const hasFetchedPopular = useRef(false);
+
+  // Fetch prices for popular symbols once
+  const fetchPopularPrices = useCallback(async () => {
+    if (hasFetchedPopular.current) return;
+    hasFetchedPopular.current = true;
+    try {
+      const { data, error } = await supabase.functions.invoke('market-data', {
+        body: { symbols: POPULAR_SYMBOLS.slice(0, 6) }
+      });
+      if (!error && data?.data) {
+        const enriched = POPULAR_SYMBOLS.slice(0, 6)
+          .map(s => {
+            const md = data.data[s];
+            return {
+              symbol: s,
+              name: STOCK_NAMES[s] || s,
+              price: md?.lastPrice || 0,
+              change: md?.change || 0,
+              changePercent: md?.changePercent || 0,
+            };
+          })
+          .filter(r => r.price > 0);
+        setPopularPrices(enriched);
+      }
+    } catch {
+      // silently fail
+    }
+  }, []);
 
   // Fetch price for a symbol
   const fetchPrice = useCallback(async (symbol: string): Promise<SearchResult | null> => {
@@ -76,8 +106,8 @@ export const OptionsSearch = ({ onSymbolChange, currentSymbol }: OptionsSearchPr
   // Search handler
   const handleSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
-      // Show popular symbols
-      setResults(POPULAR_SYMBOLS.slice(0, 6).map(s => ({
+      // Show popular symbols with real prices
+      setResults(popularPrices.length > 0 ? popularPrices : POPULAR_SYMBOLS.slice(0, 6).map(s => ({
         symbol: s,
         name: STOCK_NAMES[s] || s,
         price: 0,
@@ -106,7 +136,7 @@ export const OptionsSearch = ({ onSymbolChange, currentSymbol }: OptionsSearchPr
 
     setResults(pricesData.filter((r): r is SearchResult => r !== null && r.price > 0));
     setIsLoading(false);
-  }, [fetchPrice]);
+  }, [fetchPrice, popularPrices]);
 
   // Debounced search
   useEffect(() => {
@@ -155,6 +185,7 @@ export const OptionsSearch = ({ onSymbolChange, currentSymbol }: OptionsSearchPr
           onChange={(e) => setQuery(e.target.value.toUpperCase())}
           onFocus={() => {
             setIsOpen(true);
+            fetchPopularPrices();
             if (!query) handleSearch('');
           }}
           placeholder={`Search stocks (${currentSymbol})`}

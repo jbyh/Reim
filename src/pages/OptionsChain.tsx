@@ -134,17 +134,10 @@ export const OptionsChain = () => {
           setPriceChange(md.changePercent || 0);
           setContracts(generateOptionsChain(ticker, price));
         } else {
-          // Fallback with mock price
-          const mockPrice = 100 + Math.random() * 400;
-          setCurrentPrice(mockPrice);
-          setPriceChange((Math.random() - 0.5) * 5);
-          setContracts(generateOptionsChain(ticker, mockPrice));
+          console.warn('No price data returned for', ticker);
         }
       } catch (err) {
         console.error('Failed to fetch price:', err);
-        const mockPrice = 100 + Math.random() * 400;
-        setCurrentPrice(mockPrice);
-        setContracts(generateOptionsChain(ticker, mockPrice));
       }
       setIsLoading(false);
     };

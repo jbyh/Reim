@@ -110,7 +110,7 @@ export const AppShell = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden w-full">
+      <div className="flex-1 flex flex-col overflow-hidden w-full min-w-0">
         {/* Top Bar */}
         <TopBar
           activeTab={activeTab}
@@ -187,22 +187,45 @@ export const AppShell = () => {
         </main>
       </div>
 
-      {/* Omnipresent Trai Assistant - hidden when on chat tab */}
+      {/* Trai Right Sidebar - hidden on chat tab and mobile */}
       {activeTab !== 'chat' && (
-        <TraiAssistant
-          messages={messages}
-          pendingOrder={pendingOrder}
-          watchlist={watchlist}
-          positions={positions}
-          isLoading={isLoading}
-          currentTab={activeTab}
-          currentSymbol={optionsSymbol}
-          orderStatus={orderStatus}
-          onSendMessage={sendMessage}
-          onConfirmOrder={confirmOrder}
-          onCancelOrder={cancelOrder}
-          onNavigate={handleNavigate}
-        />
+        <div className="hidden lg:flex h-full w-[340px] xl:w-[380px] flex-shrink-0 border-l border-border/30">
+          <TraiAssistant
+            messages={messages}
+            pendingOrder={pendingOrder}
+            watchlist={watchlist}
+            positions={positions}
+            isLoading={isLoading}
+            currentTab={activeTab}
+            currentSymbol={optionsSymbol}
+            orderStatus={orderStatus}
+            onSendMessage={sendMessage}
+            onConfirmOrder={confirmOrder}
+            onCancelOrder={cancelOrder}
+            onNavigate={handleNavigate}
+            isSidebar={true}
+          />
+        </div>
+      )}
+
+      {/* Mobile Trai - floating overlay (only on mobile, not chat tab) */}
+      {activeTab !== 'chat' && (
+        <div className="lg:hidden">
+          <TraiAssistant
+            messages={messages}
+            pendingOrder={pendingOrder}
+            watchlist={watchlist}
+            positions={positions}
+            isLoading={isLoading}
+            currentTab={activeTab}
+            currentSymbol={optionsSymbol}
+            orderStatus={orderStatus}
+            onSendMessage={sendMessage}
+            onConfirmOrder={confirmOrder}
+            onCancelOrder={cancelOrder}
+            onNavigate={handleNavigate}
+          />
+        </div>
       )}
     </div>
   );
