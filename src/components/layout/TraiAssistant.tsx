@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Sparkles, 
@@ -35,6 +35,272 @@ interface QuickAction {
   variant: 'primary' | 'success' | 'warning';
 }
 
+interface OrderStatusBadgeProps {
+  pendingOrder: OrderIntent | null;
+  orderStatus?: 'pending' | 'submitting' | 'confirmed' | 'failed' | null;
+}
+
+const OrderStatusBadge = ({ pendingOrder, orderStatus }: OrderStatusBadgeProps) => {
+  if (!pendingOrder && !orderStatus) return null;
+
+  let statusConfig = {
+    icon: Clock,
+    text: 'Order Pending',
+    className: 'bg-warning/20 text-warning border-warning/30'
+  };
+
+  if (orderStatus === 'submitting') {
+    statusConfig = {
+      icon: Loader2,
+      text: 'Submitting...',
+      className: 'bg-primary/20 text-primary border-primary/30'
+    };
+  } else if (orderStatus === 'confirmed') {
+    statusConfig = {
+      icon: CheckCircle2,
+      text: 'Confirmed!',
+      className: 'bg-success/20 text-success border-success/30'
+    };
+  } else if (orderStatus === 'failed') {
+    statusConfig = {
+      icon: AlertCircle,
+      text: 'Failed',
+      className: 'bg-destructive/20 text-destructive border-destructive/30'
+    };
+  }
+
+  const Icon = statusConfig.icon;
+
+  return (
+    <div className={cn(
+      "inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium border animate-in fade-in",
+      statusConfig.className
+    )}>
+      <Icon className={cn("h-3 w-3", orderStatus === 'submitting' && "animate-spin")} />
+      {statusConfig.text}
+    </div>
+  );
+};
+
+const ConfirmationToast = ({ show }: { show: boolean }) => {
+  if (!show) return null;
+  return (
+    <div className="fixed top-4 right-4 z-[60] animate-in slide-in-from-top-4 fade-in duration-300">
+      <div className="flex items-center gap-2 px-3 py-2 bg-success/20 border border-success/30 rounded-lg shadow-lg backdrop-blur">
+        <CheckCircle2 className="h-4 w-4 text-success" />
+        <span className="text-xs font-medium text-success">Order Confirmed!</span>
+      </div>
+    </div>
+  );
+};
+
+interface ChatContentProps {
+  messages: ChatMessage[];
+  pendingOrder: OrderIntent | null;
+  watchlist: Stock[];
+  isLoading: boolean;
+  orderStatus?: 'pending' | 'submitting' | 'confirmed' | 'failed' | null;
+  quickActions: QuickAction[];
+  input: string;
+  onInputChange: (value: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onQuickAction: (action: string) => void;
+  onConfirmOrder: () => void;
+  onCancelOrder: () => void;
+  chatInputRef: React.RefObject<HTMLInputElement>;
+  className?: string;
+}
+
+const ChatContent = ({
+  messages,
+  pendingOrder,
+  watchlist,
+  isLoading,
+  orderStatus,
+  quickActions,
+  input,
+  onInputChange,
+  onSubmit,
+  onQuickAction,
+  onConfirmOrder,
+  onCancelOrder,
+  chatInputRef,
+  className = '',
+}: ChatContentProps) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  }, [messages, pendingOrder, isLoading]);
+
+  return (
+    <div className={cn("flex flex-col", className)} style={{ minHeight: 0 }}>
+      {/* Messages - relative wrapper with absolute scrollable child */}
+      <div className="relative flex-1" style={{ minHeight: 0 }}>
+        <div
+          ref={scrollContainerRef}
+          className="absolute inset-0 overflow-y-auto overscroll-contain p-3 md:p-4 space-y-3"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center p-4" style={{ minHeight: '100%' }}>
+              <div className="w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
+                <Sparkles className="h-7 w-7 text-white" />
+              </div>
+              <h3 className="font-bold text-base text-foreground mb-2">Hey! I'm Trai</h3>
+              <p className="text-xs text-muted-foreground mb-4 max-w-[260px]">
+                Your AI trading companion. I can analyze markets, suggest trades, and help you make smarter decisions.
+              </p>
+              <div className="w-full space-y-2 max-w-[280px]">
+                {quickActions.map((qa) => (
+                  <button
+                    key={qa.label}
+                    onClick={() => onQuickAction(qa.action)}
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <qa.icon className={cn(
+                        "h-4 w-4",
+                        qa.variant === 'primary' && "text-primary",
+                        qa.variant === 'success' && "text-success",
+                        qa.variant === 'warning' && "text-warning"
+                      )} />
+                      <span className="text-xs text-foreground">{qa.label}</span>
+                    </div>
+                    <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={cn(
+                    'flex gap-2',
+                    message.role === 'user' ? 'flex-row-reverse' : ''
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center',
+                      message.role === 'assistant' ? 'gradient-purple' : 'bg-primary/20'
+                    )}
+                  >
+                    {message.role === 'assistant' ? (
+                      <Bot className="h-3.5 w-3.5 text-white" />
+                    ) : (
+                      <User className="h-3.5 w-3.5 text-primary" />
+                    )}
+                  </div>
+                  
+                  <div
+                    className={cn(
+                      'max-w-[85%]',
+                      message.role === 'assistant' ? 'chat-bubble-ai' : 'chat-bubble-user'
+                    )}
+                  >
+                    {message.role === 'assistant' ? (
+                      message.content ? (
+                        <AIMessageRenderer content={message.content} watchlist={watchlist} />
+                      ) : isLoading ? (
+                        <span className="flex items-center gap-2 text-xs">
+                          <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                          <span className="text-muted-foreground">Thinking...</span>
+                        </span>
+                      ) : null
+                    ) : (
+                      <p className="text-xs whitespace-pre-wrap">{message.content}</p>
+                    )}
+                    {message.content && (
+                      <p className="text-[9px] mt-1.5 text-muted-foreground/60">
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Order Confirmation */}
+              {pendingOrder && (
+                <div className="max-w-[90%] ml-9 animate-in slide-in-from-bottom-4 duration-300">
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <Clock className="h-3 w-3 text-warning" />
+                    <span className="text-xs font-medium text-warning">Order Awaiting Confirmation</span>
+                  </div>
+                  <TradeTicketWidget
+                    order={pendingOrder}
+                    stock={watchlist.find((s) => s.symbol === pendingOrder.symbol)}
+                    onConfirm={onConfirmOrder}
+                    onCancel={onCancelOrder}
+                    showActions={true}
+                    isSubmitting={orderStatus === 'submitting'}
+                  />
+                </div>
+              )}
+            </>
+          )}
+          <div className="h-1" />
+        </div>
+      </div>
+
+      {/* Quick Actions - When messages exist */}
+      {messages.length > 0 && (
+        <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
+          {quickActions.map((qa) => (
+            <button
+              key={qa.label}
+              onClick={() => onQuickAction(qa.action)}
+              disabled={isLoading}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all",
+                "border bg-secondary/30 hover:bg-secondary",
+                qa.variant === 'primary' && "border-primary/30 text-primary",
+                qa.variant === 'success' && "border-success/30 text-success",
+                qa.variant === 'warning' && "border-warning/30 text-warning"
+              )}
+            >
+              <qa.icon className="h-3 w-3" />
+              {qa.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="flex-shrink-0 p-3 border-t border-border/30 bg-card/50">
+        <form onSubmit={onSubmit} className="flex gap-2">
+          <Input
+            ref={chatInputRef}
+            value={input}
+            onChange={(e) => onInputChange(e.target.value)}
+            placeholder="Ask Trai anything..."
+            inputMode="text"
+            enterKeyHint="send"
+            autoComplete="off"
+            className="flex-1 h-10 bg-input border-border/50 rounded-xl text-sm"
+            disabled={isLoading}
+          />
+          <Button 
+            type="submit" 
+            size="icon"
+            disabled={!input.trim() || isLoading}
+            className="h-10 w-10 rounded-xl bg-primary hover:bg-primary/90 glow-primary"
+          >
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 interface TraiAssistantProps {
   messages: ChatMessage[];
   pendingOrder: OrderIntent | null;
@@ -68,14 +334,11 @@ export const TraiAssistant = ({
   isFullPage = false,
   isSidebar = false
 }: TraiAssistantProps) => {
-  // isExpanded: 'collapsed' | 'half' | 'full' - three states for mobile
   const [expansionState, setExpansionState] = useState<'collapsed' | 'half' | 'full'>('collapsed');
   const [isMinimized, setIsMinimized] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [showConfirmAnimation, setShowConfirmAnimation] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -140,28 +403,6 @@ export const TraiAssistant = ({
     return baseActions.slice(0, 3);
   }, [currentTab, currentSymbol, positions, pendingOrder]);
 
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 50);
-  };
-
-  useEffect(() => {
-    if (expansionState !== 'collapsed' || isFullPage) {
-      scrollToBottom();
-    }
-  }, [messages, pendingOrder, expansionState, isFullPage]);
-
-  // Auto-focus the chat input when expanding to full (mobile overlay)
-  useEffect(() => {
-    if (expansionState === 'full' && !isSidebar && !isFullPage) {
-      // Wait for the DOM to paint the expanded view, then focus
-      requestAnimationFrame(() => {
-        chatInputRef.current?.focus();
-      });
-    }
-  }, [expansionState, isSidebar, isFullPage]);
-
   useEffect(() => {
     if (orderStatus === 'confirmed') {
       setShowConfirmAnimation(true);
@@ -169,15 +410,26 @@ export const TraiAssistant = ({
     }
   }, [orderStatus]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // When expanding to full on mobile, focus after a brief paint delay
+  useEffect(() => {
+    if (expansionState === 'full' && !isSidebar && !isFullPage) {
+      const raf = requestAnimationFrame(() => {
+        chatInputRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [expansionState, isSidebar, isFullPage]);
+
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
     onSendMessage(input.trim());
     setInput('');
+    // Keep focus on input after sending
     chatInputRef.current?.focus();
-  };
+  }, [input, isLoading, onSendMessage]);
 
-  const handleQuickAction = (action: string) => {
+  const handleQuickAction = useCallback((action: string) => {
     if (action === '__confirm_order__') {
       onConfirmOrder();
       return;
@@ -186,16 +438,15 @@ export const TraiAssistant = ({
       onCancelOrder();
       return;
     }
-
     onSendMessage(action);
     if (expansionState === 'collapsed' && !isFullPage) {
       setExpansionState('full');
     }
-  };
+  }, [onConfirmOrder, onCancelOrder, onSendMessage, expansionState, isFullPage]);
 
   const toggleExpansion = () => {
     if (expansionState === 'collapsed') {
-      setExpansionState('full'); // Go straight to full on mobile
+      setExpansionState('full');
     } else if (expansionState === 'half') {
       setExpansionState('full');
     } else {
@@ -203,245 +454,28 @@ export const TraiAssistant = ({
     }
   };
 
-  // Order status indicator
-  const OrderStatusBadge = () => {
-    if (!pendingOrder && !orderStatus) return null;
-    
-    let statusConfig = {
-      icon: Clock,
-      text: 'Order Pending',
-      className: 'bg-warning/20 text-warning border-warning/30'
-    };
-
-    if (orderStatus === 'submitting') {
-      statusConfig = {
-        icon: Loader2,
-        text: 'Submitting...',
-        className: 'bg-primary/20 text-primary border-primary/30'
-      };
-    } else if (orderStatus === 'confirmed') {
-      statusConfig = {
-        icon: CheckCircle2,
-        text: 'Confirmed!',
-        className: 'bg-success/20 text-success border-success/30'
-      };
-    } else if (orderStatus === 'failed') {
-      statusConfig = {
-        icon: AlertCircle,
-        text: 'Failed',
-        className: 'bg-destructive/20 text-destructive border-destructive/30'
-      };
-    }
-
-    const Icon = statusConfig.icon;
-    
-    return (
-      <div className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium border animate-in fade-in",
-        statusConfig.className
-      )}>
-        <Icon className={cn("h-3 w-3", orderStatus === 'submitting' && "animate-spin")} />
-        {statusConfig.text}
-      </div>
-    );
+  // Shared ChatContent props
+  const chatContentProps = {
+    messages,
+    pendingOrder,
+    watchlist,
+    isLoading,
+    orderStatus,
+    quickActions,
+    input,
+    onInputChange: setInput,
+    onSubmit: handleSubmit,
+    onQuickAction: handleQuickAction,
+    onConfirmOrder,
+    onCancelOrder,
+    chatInputRef,
   };
 
-  // Confirmation toast
-  const ConfirmationToast = () => {
-    if (!showConfirmAnimation) return null;
-    return (
-      <div className="fixed top-4 right-4 z-[60] animate-in slide-in-from-top-4 fade-in duration-300">
-        <div className="flex items-center gap-2 px-3 py-2 bg-success/20 border border-success/30 rounded-lg shadow-lg backdrop-blur">
-          <CheckCircle2 className="h-4 w-4 text-success" />
-          <span className="text-xs font-medium text-success">Order Confirmed!</span>
-        </div>
-      </div>
-    );
-  };
-
-  // Chat content component - shared between overlay and full page
-  // Uses absolute positioning for the scroll area to avoid mobile Safari flex bugs
-  const ChatContent = ({ className = '' }: { className?: string }) => {
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      const el = scrollContainerRef.current;
-      if (el) {
-        requestAnimationFrame(() => {
-          el.scrollTop = el.scrollHeight;
-        });
-      }
-    }, [messages, pendingOrder, isLoading]);
-
-    return (
-      <div className={cn("flex flex-col", className)} style={{ minHeight: 0 }}>
-        {/* Messages - relative wrapper with absolute scrollable child */}
-        <div className="relative flex-1" style={{ minHeight: 0 }}>
-          <div
-            ref={scrollContainerRef}
-            className="absolute inset-0 overflow-y-auto overscroll-contain p-3 md:p-4 space-y-3"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-center p-4" style={{ minHeight: '100%' }}>
-                <div className="w-14 h-14 rounded-2xl gradient-purple glow-primary flex items-center justify-center mb-4">
-                  <Sparkles className="h-7 w-7 text-white" />
-                </div>
-                <h3 className="font-bold text-base text-foreground mb-2">Hey! I'm Trai</h3>
-                <p className="text-xs text-muted-foreground mb-4 max-w-[260px]">
-                  Your AI trading companion. I can analyze markets, suggest trades, and help you make smarter decisions.
-                </p>
-                <div className="w-full space-y-2 max-w-[280px]">
-                  {quickActions.map((qa) => (
-                    <button
-                      key={qa.label}
-                      onClick={() => handleQuickAction(qa.action)}
-                      className="w-full flex items-center justify-between p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors text-left group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <qa.icon className={cn(
-                          "h-4 w-4",
-                          qa.variant === 'primary' && "text-primary",
-                          qa.variant === 'success' && "text-success",
-                          qa.variant === 'warning' && "text-warning"
-                        )} />
-                        <span className="text-xs text-foreground">{qa.label}</span>
-                      </div>
-                      <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <>
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      'flex gap-2',
-                      message.role === 'user' ? 'flex-row-reverse' : ''
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        'flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center',
-                        message.role === 'assistant' ? 'gradient-purple' : 'bg-primary/20'
-                      )}
-                    >
-                      {message.role === 'assistant' ? (
-                        <Bot className="h-3.5 w-3.5 text-white" />
-                      ) : (
-                        <User className="h-3.5 w-3.5 text-primary" />
-                      )}
-                    </div>
-                    
-                    <div
-                      className={cn(
-                        'max-w-[85%]',
-                        message.role === 'assistant' ? 'chat-bubble-ai' : 'chat-bubble-user'
-                      )}
-                    >
-                      {message.role === 'assistant' ? (
-                        message.content ? (
-                          <AIMessageRenderer content={message.content} watchlist={watchlist} />
-                        ) : isLoading ? (
-                          <span className="flex items-center gap-2 text-xs">
-                            <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                            <span className="text-muted-foreground">Thinking...</span>
-                          </span>
-                        ) : null
-                      ) : (
-                        <p className="text-xs whitespace-pre-wrap">{message.content}</p>
-                      )}
-                      {message.content && (
-                        <p className="text-[9px] mt-1.5 text-muted-foreground/60">
-                          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-
-                {/* Order Confirmation */}
-                {pendingOrder && (
-                  <div className="max-w-[90%] ml-9 animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="mb-1.5 flex items-center gap-1.5">
-                      <Clock className="h-3 w-3 text-warning" />
-                      <span className="text-xs font-medium text-warning">Order Awaiting Confirmation</span>
-                    </div>
-                    <TradeTicketWidget
-                      order={pendingOrder}
-                      stock={watchlist.find((s) => s.symbol === pendingOrder.symbol)}
-                      onConfirm={onConfirmOrder}
-                      onCancel={onCancelOrder}
-                      showActions={true}
-                      isSubmitting={orderStatus === 'submitting'}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-            <div className="h-1" />
-          </div>
-        </div>
-
-        {/* Quick Actions - When messages exist */}
-        {messages.length > 0 && (
-          <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
-            {quickActions.map((qa) => (
-              <button
-                key={qa.label}
-                onClick={() => handleQuickAction(qa.action)}
-                disabled={isLoading}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all",
-                  "border bg-secondary/30 hover:bg-secondary",
-                  qa.variant === 'primary' && "border-primary/30 text-primary",
-                  qa.variant === 'success' && "border-success/30 text-success",
-                  qa.variant === 'warning' && "border-warning/30 text-warning"
-                )}
-              >
-                <qa.icon className="h-3 w-3" />
-                {qa.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Input */}
-        <div className="flex-shrink-0 p-3 border-t border-border/30 bg-card/50">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
-              ref={chatInputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask Trai anything..."
-              inputMode="text"
-              enterKeyHint="send"
-              autoComplete="off"
-              autoFocus={false}
-              className="flex-1 h-10 bg-input border-border/50 rounded-xl text-sm"
-              disabled={isLoading}
-            />
-            <Button 
-              type="submit" 
-              size="icon"
-              disabled={!input.trim() || isLoading}
-              className="h-10 w-10 rounded-xl bg-primary hover:bg-primary/90 glow-primary"
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
-          </form>
-        </div>
-      </div>
-    );
-  };
-
-  // If this is the full page mode (dedicated chat tab), render full page experience
+  // ── Full page mode (dedicated chat tab) ──
   if (isFullPage) {
     return (
       <div className="h-dvh flex flex-col bg-background overflow-hidden">
-        <ConfirmationToast />
+        <ConfirmationToast show={showConfirmAnimation} />
         <div className="flex items-center justify-between p-4 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl gradient-purple glow-primary flex items-center justify-center">
@@ -456,7 +490,7 @@ export const TraiAssistant = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <OrderStatusBadge />
+            <OrderStatusBadge pendingOrder={pendingOrder} orderStatus={orderStatus} />
             <Button
               variant="ghost"
               size="icon"
@@ -468,15 +502,13 @@ export const TraiAssistant = ({
             </Button>
           </div>
         </div>
-        <ChatContent className="flex-1 min-h-0" />
+        <ChatContent {...chatContentProps} className="flex-1 min-h-0" />
       </div>
     );
   }
 
-  // Sidebar mode - persistent right panel on desktop with collapse/expand
+  // ── Sidebar mode ──
   if (isSidebar) {
-    // sidebarOpen state is at top level
-
     if (!sidebarOpen) {
       return (
         <div className="h-full flex flex-col items-center border-l border-border/30 bg-card/30 w-12">
@@ -496,8 +528,7 @@ export const TraiAssistant = ({
 
     return (
       <div className="h-full flex flex-col bg-card/30 overflow-hidden w-[340px] xl:w-[380px] border-l border-border/30">
-        <ConfirmationToast />
-        {/* Header */}
+        <ConfirmationToast show={showConfirmAnimation} />
         <div className="flex items-center justify-between p-3 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl gradient-purple glow-primary flex items-center justify-center">
@@ -512,7 +543,7 @@ export const TraiAssistant = ({
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <OrderStatusBadge />
+            <OrderStatusBadge pendingOrder={pendingOrder} orderStatus={orderStatus} />
             <Button
               variant="ghost"
               size="icon"
@@ -525,7 +556,6 @@ export const TraiAssistant = ({
           </div>
         </div>
 
-        {/* Pending Order Alert */}
         {pendingOrder && (
           <div className="p-2 bg-warning/10 border-b border-warning/30 flex items-center gap-2">
             <Clock className="h-3 w-3 text-warning" />
@@ -535,16 +565,16 @@ export const TraiAssistant = ({
           </div>
         )}
 
-        <ChatContent className="flex-1 min-h-0" />
+        <ChatContent {...chatContentProps} className="flex-1 min-h-0" />
       </div>
     );
   }
 
-  // Minimized state - just a floating button
+  // ── Minimized state ──
   if (isMinimized) {
     return (
       <>
-        <ConfirmationToast />
+        <ConfirmationToast show={showConfirmAnimation} />
         <button
           onClick={() => setIsMinimized(false)}
           className="fixed bottom-4 right-4 z-50 w-12 h-12 rounded-xl gradient-purple glow-primary flex items-center justify-center shadow-xl hover:scale-105 transition-transform"
@@ -560,11 +590,11 @@ export const TraiAssistant = ({
     );
   }
 
-  // Collapsed state - compact bar at bottom
+  // ── Collapsed state ──
   if (expansionState === 'collapsed') {
     return (
       <>
-        <ConfirmationToast />
+        <ConfirmationToast show={showConfirmAnimation} />
         <div className="fixed bottom-0 left-0 right-0 z-40 p-3 pointer-events-none md:left-auto md:right-4 md:bottom-4 md:w-[380px]">
           <div className="pointer-events-auto glass-card rounded-xl border border-primary/20 shadow-xl overflow-hidden">
             {/* Header */}
@@ -582,7 +612,7 @@ export const TraiAssistant = ({
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <OrderStatusBadge />
+                <OrderStatusBadge pendingOrder={pendingOrder} orderStatus={orderStatus} />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -649,31 +679,39 @@ export const TraiAssistant = ({
               ))}
             </div>
 
-            {/* Tap to open chat */}
-            <button
-              type="button"
-              onClick={() => setExpansionState('full')}
-              className="mx-2 mb-2 flex items-center gap-2 h-10 px-3 bg-input/50 border border-border/50 rounded-xl text-sm text-muted-foreground hover:bg-input/80 hover:border-primary/30 transition-colors"
-            >
-              <Send className="h-3.5 w-3.5 text-primary" />
-              <span>Message Trai...</span>
-            </button>
+            {/* Collapsed input - real input that expands on focus */}
+            <div className="mx-2 mb-2">
+              <form onSubmit={(e) => { e.preventDefault(); setExpansionState('full'); }} className="flex gap-2">
+                <Input
+                  value=""
+                  readOnly
+                  onFocus={() => setExpansionState('full')}
+                  placeholder="Message Trai..."
+                  className="flex-1 h-10 bg-input/50 border-border/50 rounded-xl text-sm cursor-pointer"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={() => setExpansionState('full')}
+                  className="h-10 w-10 rounded-xl bg-primary hover:bg-primary/90"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </form>
+            </div>
           </div>
         </div>
       </>
     );
   }
 
-  // Expanded state - full screen on mobile, panel on desktop
+  // ── Expanded state ──
   return (
     <>
-      <ConfirmationToast />
-      {/* Mobile: Full screen overlay */}
+      <ConfirmationToast show={showConfirmAnimation} />
       <div className={cn(
         "fixed z-50 pointer-events-none transition-all duration-300",
-        // Mobile: full screen
         "inset-0 md:inset-auto",
-        // Desktop: bottom right panel
         "md:bottom-4 md:right-4 md:w-[400px] md:h-[550px]"
       )}>
         <div className="pointer-events-auto h-full glass-card md:rounded-2xl border-t md:border border-primary/20 shadow-2xl flex flex-col overflow-hidden bg-background/95 backdrop-blur-xl" style={{ height: '100dvh', maxHeight: '100dvh' }}>
@@ -692,7 +730,7 @@ export const TraiAssistant = ({
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <OrderStatusBadge />
+              <OrderStatusBadge pendingOrder={pendingOrder} orderStatus={orderStatus} />
               <Button
                 variant="ghost"
                 size="icon"
@@ -721,7 +759,7 @@ export const TraiAssistant = ({
             </div>
           </div>
 
-          <ChatContent className="flex-1 min-h-0" />
+          <ChatContent {...chatContentProps} className="flex-1 min-h-0" />
         </div>
       </div>
     </>
