@@ -71,6 +71,7 @@ export const TraiAssistant = ({
   // isExpanded: 'collapsed' | 'half' | 'full' - three states for mobile
   const [expansionState, setExpansionState] = useState<'collapsed' | 'half' | 'full'>('collapsed');
   const [isMinimized, setIsMinimized] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [showConfirmAnimation, setShowConfirmAnimation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -457,10 +458,29 @@ export const TraiAssistant = ({
     );
   }
 
-  // Sidebar mode - persistent right panel on desktop
+  // Sidebar mode - persistent right panel on desktop with collapse/expand
   if (isSidebar) {
+    // sidebarOpen state is at top level
+
+    if (!sidebarOpen) {
+      return (
+        <div className="h-full flex flex-col items-center border-l border-border/30 bg-card/30 w-12">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="mt-3 w-9 h-9 rounded-xl gradient-purple glow-primary flex items-center justify-center hover:scale-105 transition-transform"
+            title="Open Trai"
+          >
+            <Sparkles className="h-4 w-4 text-white" />
+          </button>
+          {pendingOrder && (
+            <span className="mt-2 w-3 h-3 bg-warning rounded-full animate-pulse" />
+          )}
+        </div>
+      );
+    }
+
     return (
-      <div className="h-full flex flex-col bg-card/30 overflow-hidden w-full">
+      <div className="h-full flex flex-col bg-card/30 overflow-hidden w-[340px] xl:w-[380px] border-l border-border/30">
         <ConfirmationToast />
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-border/30 bg-gradient-to-r from-primary/5 to-transparent">
@@ -482,10 +502,10 @@ export const TraiAssistant = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground hover:text-foreground"
-              onClick={() => navigate('/profile')}
-              title="Settings"
+              onClick={() => setSidebarOpen(false)}
+              title="Collapse Trai"
             >
-              <Settings className="h-3.5 w-3.5" />
+              <Minimize2 className="h-3.5 w-3.5" />
             </Button>
           </div>
         </div>

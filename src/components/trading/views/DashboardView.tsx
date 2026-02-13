@@ -30,9 +30,9 @@ export const DashboardView = ({
 }: DashboardViewProps) => {
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="p-4 lg:p-6">
+      <div className="p-4 lg:p-6 w-full">
         {/* Bento Grid Layout */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 lg:gap-5 auto-rows-min">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 lg:gap-5 auto-rows-min w-full">
           
           {/* Portfolio Chart - Large card spanning 8 cols */}
           <div className="md:col-span-2 lg:col-span-8 row-span-1">
