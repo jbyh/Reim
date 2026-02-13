@@ -156,7 +156,7 @@ export const IntuitiveOptionsChart = ({
       daysToExpiry: daysFromNow,
       bid: Math.max(0.01, premium - spread),
       ask: premium + spread,
-      openInterest: Math.floor(Math.random() * 10000) + 500
+      openInterest: 0
     };
   }, [currentPrice, symbol]);
 

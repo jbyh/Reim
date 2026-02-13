@@ -487,6 +487,7 @@ serve(async (req) => {
       if (!alpacaHeaders) throw new Error('Alpaca credentials required for chart data');
       const url = new URL(`${ALPACA_DATA_URL}/stocks/${symbol}/bars`);
       url.searchParams.set('timeframe', timeframe || '1Day');
+      url.searchParams.set('feed', 'iex');
       url.searchParams.set('limit', '365');
       if (start) url.searchParams.set('start', start);
       if (end) url.searchParams.set('end', end);
@@ -551,7 +552,7 @@ serve(async (req) => {
       const symbolsParam = stockSymbols.join(',');
 
       const snapshotsResponse = await safeFetch(
-        `${ALPACA_DATA_URL}/stocks/snapshots?symbols=${symbolsParam}`,
+        `${ALPACA_DATA_URL}/stocks/snapshots?symbols=${symbolsParam}&feed=iex`,
         { headers: alpacaHeaders }
       );
 
@@ -565,7 +566,7 @@ serve(async (req) => {
 
       // Combine data for each stock symbol
       for (const sym of stockSymbols) {
-        const snap = snapshotsData?.snapshots?.[sym];
+        const snap = snapshotsData?.[sym] || snapshotsData?.snapshots?.[sym];
         const latestTrade = snap?.latestTrade;
         const latestQuote = snap?.latestQuote;
         const prevDailyBar = snap?.prevDailyBar;
