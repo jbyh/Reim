@@ -15,7 +15,7 @@ export const OptionsMatrix = ({ contracts, selectedContract, onContractSelect, c
 
   // Group contracts by expiry
   const groupedContracts = contracts
-    .filter(c => c.type === optionType || optionType === 'call') // Mock data is all calls
+    .filter(c => c.type === optionType)
     .reduce((acc, contract) => {
       const key = contract.expiry;
       if (!acc[key]) {
@@ -133,7 +133,10 @@ export const OptionsMatrix = ({ contracts, selectedContract, onContractSelect, c
               ${(selectedContract.premium * 100).toFixed(2)}
             </span>
             <span className="text-lg font-bold font-mono text-success">
-              {Math.round(45 + Math.random() * 30)}%
+              {selectedContract.strike < currentPrice 
+                ? `${Math.min(95, Math.round(50 + (currentPrice - selectedContract.strike) / currentPrice * 100))}%`
+                : `${Math.max(5, Math.round(50 - (selectedContract.strike - currentPrice) / currentPrice * 100))}%`
+              }
             </span>
           </div>
           <button className="w-full mt-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all btn-primary">
