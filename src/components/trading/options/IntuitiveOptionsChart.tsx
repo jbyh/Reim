@@ -21,6 +21,13 @@ export interface GeneratedContract {
   bid: number;
   ask: number;
   openInterest: number;
+  // Real data fields from Alpaca
+  realSymbol?: string;
+  greeks?: { delta: number; gamma: number; theta: number; vega: number };
+  impliedVolatility?: number;
+  volume?: number;
+  realPremium?: number;
+  isLive?: boolean;
 }
 
 // Black-Scholes approximation for option pricing
