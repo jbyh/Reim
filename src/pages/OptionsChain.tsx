@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, TrendingUp, TrendingDown, Search, LineChart, Sparkles } from 'lucide-react';
+import { ArrowLeft, TrendingUp, TrendingDown, Search, LineChart, Sparkles, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -115,6 +115,7 @@ export const OptionsChain = () => {
   const [drawnPath, setDrawnPath] = useState<PricePoint[]>([]);
   const [timeframe, setTimeframe] = useState<'1H' | '1D' | '1W' | '1M'>('1D');
   const [contracts, setContracts] = useState<OptionContract[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
 
   // Fetch stock price when ticker changes
   useEffect(() => {
@@ -178,96 +179,99 @@ export const OptionsChain = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Header */}
       <header className="border-b border-border/50 bg-card/30 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-[1600px] mx-auto px-6 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-primary/20">
-                  <LineChart className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <h1 className="font-bold text-xl">Options Chain</h1>
-                  <p className="text-xs text-muted-foreground">Visual contract explorer</p>
-                </div>
+        <div className="max-w-[1600px] mx-auto px-3 md:px-6 py-3">
+          <div className="flex items-center gap-2 md:gap-4 flex-wrap">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="rounded-xl h-8 w-8 md:h-9 md:w-9 shrink-0">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-2 md:gap-3 min-w-0">
+              <div className="p-1.5 md:p-2.5 rounded-xl bg-primary/20 shrink-0">
+                <LineChart className="h-4 w-4 md:h-5 md:w-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="font-bold text-sm md:text-xl truncate">Options Chain</h1>
+                <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">Visual contract explorer</p>
               </div>
             </div>
-
-            {/* Search Bar */}
-            <div className="flex-1 max-w-md">
-              <StockSearch placeholder="Search for a different stock..." />
+            <div className="flex items-center gap-2 ml-auto shrink-0">
+              <Button variant="ghost" size="icon" className="rounded-xl h-8 w-8" onClick={() => setShowSearch?.(!showSearch)}>
+                <Search className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => navigate(`/asset/${ticker}`)}
+                className="rounded-xl h-8 text-xs gap-1"
+              >
+                <BarChart3 className="h-3 w-3" /> Chart
+              </Button>
             </div>
-
-            <Button 
-              variant="outline" 
-              onClick={() => navigate(`/asset/${ticker}`)}
-              className="rounded-xl gap-2"
-            >
-              View Stock Chart
-            </Button>
           </div>
+          {showSearch && (
+            <div className="mt-2">
+              <StockSearch placeholder="Search..." onClose={() => setShowSearch(false)} />
+            </div>
+          )}
         </div>
       </header>
 
       <div className="max-w-[1600px] mx-auto p-4 md:p-6 space-y-6">
         {/* Ticker Header Card */}
-        <div className="glass-card rounded-2xl p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="glass-card rounded-xl md:rounded-2xl p-3 md:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
               <div className={cn(
-                "p-3 rounded-2xl",
+                "p-2 md:p-3 rounded-xl md:rounded-2xl shrink-0",
                 isPositive ? "bg-success/20" : "bg-destructive/20"
               )}>
                 {isPositive ? (
-                  <TrendingUp className="h-6 w-6 text-success" />
+                  <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-success" />
                 ) : (
-                  <TrendingDown className="h-6 w-6 text-destructive" />
+                  <TrendingDown className="h-5 w-5 md:h-6 md:w-6 text-destructive" />
                 )}
               </div>
-              <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-3xl font-bold font-mono text-foreground">{ticker}</h2>
-                  <Badge variant="outline" className="bg-secondary/60 text-muted-foreground border-border/40">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl md:text-3xl font-bold font-mono text-foreground">{ticker}</h2>
+                  <Badge variant="outline" className="bg-secondary/60 text-muted-foreground border-border/40 text-[10px]">
                     OPTIONS
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">{STOCK_NAMES[ticker] || ticker}</p>
+                <p className="text-xs md:text-sm text-muted-foreground mt-0.5">{STOCK_NAMES[ticker] || ticker}</p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-4xl font-bold font-mono text-foreground">${currentPrice.toFixed(2)}</p>
-              <div className="flex items-center justify-end gap-2 mt-1">
+              <p className="text-2xl md:text-4xl font-bold font-mono text-foreground">${currentPrice.toFixed(2)}</p>
+              <div className="flex items-center justify-end gap-2 mt-0.5">
                 <div className={cn(
-                  "flex items-center gap-1 text-sm font-medium",
+                  "flex items-center gap-1 text-xs md:text-sm font-medium",
                   isPositive ? "text-success" : "text-destructive"
                 )}>
-                  {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                  {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
                 </div>
-                <span className="text-muted-foreground text-sm">Volume {volume}</span>
+                <span className="text-muted-foreground text-xs">Vol {volume}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Timeframe Selector */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Sparkles className="h-4 w-4 text-primary" />
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground">
+            <Sparkles className="h-3 w-3 md:h-4 md:w-4 text-primary shrink-0" />
             <span>Draw your price prediction on the chart to see projected P&L</span>
           </div>
-          <div className="flex items-center gap-2 bg-secondary/60 rounded-xl p-1">
+          <div className="flex items-center gap-1 bg-secondary/60 rounded-lg p-0.5 shrink-0">
             {(['1H', '1D', '1W', '1M'] as const).map((tf) => (
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
                 className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                  "px-2.5 md:px-4 py-1.5 md:py-2 rounded-md text-xs md:text-sm font-medium transition-all",
                   timeframe === tf 
                     ? "bg-primary text-primary-foreground" 
                     : "text-muted-foreground hover:text-foreground"

@@ -76,6 +76,7 @@ export const TraiAssistant = ({
   const [showConfirmAnimation, setShowConfirmAnimation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   // Context-aware quick actions based on current page
@@ -163,7 +164,7 @@ export const TraiAssistant = ({
     if (!input.trim() || isLoading) return;
     onSendMessage(input.trim());
     setInput('');
-    inputRef.current?.focus();
+    chatInputRef.current?.focus();
   };
 
   const handleQuickAction = (action: string) => {
@@ -401,13 +402,14 @@ export const TraiAssistant = ({
         <div className="flex-shrink-0 p-3 border-t border-border/30 bg-card/50">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <Input
-              ref={inputRef}
+              ref={chatInputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask Trai anything..."
               inputMode="text"
               enterKeyHint="send"
               autoComplete="off"
+              autoFocus={false}
               className="flex-1 h-10 bg-input border-border/50 rounded-xl text-sm"
               disabled={isLoading}
             />
@@ -648,10 +650,15 @@ export const TraiAssistant = ({
                 enterKeyHint="send"
                 className="flex-1 h-9 bg-input/50 border-border/50 rounded-lg text-xs"
                 disabled={isLoading}
-                onFocus={() => {
-                  toggleExpansion();
-                  // Re-focus after state change so mobile keyboard appears
-                  setTimeout(() => inputRef.current?.focus(), 100);
+              onFocus={(e) => {
+                  e.preventDefault();
+                  setExpansionState('full');
+                  // Focus the chat input in the expanded view after render
+                  setTimeout(() => {
+                    chatInputRef.current?.focus();
+                    // Trigger click to ensure mobile keyboard shows
+                    chatInputRef.current?.click();
+                  }, 300);
                 }}
               />
               <Button 

@@ -1,4 +1,5 @@
 import { Portfolio, Position } from '@/types/trading';
+import { useNavigate } from 'react-router-dom';
 import { 
   Wallet, 
   TrendingUp, 
@@ -7,7 +8,8 @@ import {
   DollarSign,
   ArrowUpRight,
   ArrowDownRight,
-  BarChart3
+  BarChart3,
+  ChevronRight
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +20,7 @@ interface PortfolioPanelProps {
 }
 
 export const PortfolioPanel = ({ portfolio, positions, onPositionClick }: PortfolioPanelProps) => {
+  const navigate = useNavigate();
   const totalPositionValue = positions.reduce((sum, p) => sum + p.marketValue, 0);
   const allocationPercent = portfolio.equity > 0 ? (totalPositionValue / portfolio.equity) * 100 : 0;
 
@@ -139,8 +142,8 @@ export const PortfolioPanel = ({ portfolio, positions, onPositionClick }: Portfo
               positions.map((position) => (
                 <button
                   key={position.symbol}
-                  onClick={() => onPositionClick?.(position)}
-                  className="p-4 hover:bg-secondary/30 transition-colors w-full text-left"
+                  onClick={() => navigate(`/asset/${encodeURIComponent(position.symbol)}`)}
+                  className="p-4 hover:bg-secondary/30 transition-colors w-full text-left group"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -176,6 +179,7 @@ export const PortfolioPanel = ({ portfolio, positions, onPositionClick }: Portfo
                         </span>
                       </div>
                     </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                   </div>
                   
                   {/* Progress bar showing allocation */}

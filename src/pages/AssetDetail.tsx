@@ -735,31 +735,6 @@ export const AssetDetail = () => {
               </div>
             </div>
 
-            {/* Quick Trade Panel */}
-            <div className="glass-card-elevated rounded-xl md:rounded-2xl p-4 md:p-5">
-              <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-                <Zap className="h-4 w-4 text-primary" /> Trade {displaySymbol}
-              </h3>
-              <div className="space-y-3">
-                <Button onClick={() => handleOpenTrade('buy')} className="w-full rounded-xl h-11 text-sm font-semibold bg-success hover:bg-success/90 text-success-foreground">
-                  <ArrowUpRight className="h-4 w-4 mr-2" /> Buy {displaySymbol}
-                </Button>
-                <Button onClick={() => handleOpenTrade('sell')} className="w-full rounded-xl h-11 text-sm font-semibold bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                  <ArrowDownRight className="h-4 w-4 mr-2" /> Sell {displaySymbol}
-                </Button>
-                {!isCrypto && (
-                  <>
-                    <div className="border-t border-border/30 pt-3">
-                      <p className="text-[10px] text-muted-foreground mb-2 uppercase tracking-wider">Options</p>
-                      <Button onClick={() => navigate(`/options/${encodeURIComponent(stock.symbol)}`)} variant="outline" className="w-full rounded-xl h-10 text-sm border-primary/30 hover:bg-primary/10">
-                        <LineChart className="h-4 w-4 mr-2" /> Visual Options Chart
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
             {/* Your Position */}
             {position && (
               <div className="glass-card-elevated rounded-xl md:rounded-2xl p-4 md:p-5 border-primary/20">
