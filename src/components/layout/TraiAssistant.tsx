@@ -405,6 +405,9 @@ export const TraiAssistant = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask Trai anything..."
+              inputMode="text"
+              enterKeyHint="send"
+              autoComplete="off"
               className="flex-1 h-10 bg-input border-border/50 rounded-xl text-sm"
               disabled={isLoading}
             />
@@ -641,9 +644,15 @@ export const TraiAssistant = ({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask Trai anything..."
+                inputMode="text"
+                enterKeyHint="send"
                 className="flex-1 h-9 bg-input/50 border-border/50 rounded-lg text-xs"
                 disabled={isLoading}
-                onFocus={toggleExpansion}
+                onFocus={() => {
+                  toggleExpansion();
+                  // Re-focus after state change so mobile keyboard appears
+                  setTimeout(() => inputRef.current?.focus(), 100);
+                }}
               />
               <Button 
                 type="submit" 
