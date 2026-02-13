@@ -639,37 +639,34 @@ export const TraiAssistant = ({
               ))}
             </div>
 
-            {/* Input */}
-            <form onSubmit={handleSubmit} className="p-2 pt-0 flex gap-2">
-              <Input
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask Trai anything..."
-                inputMode="text"
-                enterKeyHint="send"
-                className="flex-1 h-9 bg-input/50 border-border/50 rounded-lg text-xs"
-                disabled={isLoading}
-              onFocus={(e) => {
-                  e.preventDefault();
+            {/* Input - use a fake button to avoid keyboard bounce on expand */}
+            <div className="p-2 pt-0 flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
                   setExpansionState('full');
-                  // Focus the chat input in the expanded view after render
                   setTimeout(() => {
                     chatInputRef.current?.focus();
-                    // Trigger click to ensure mobile keyboard shows
-                    chatInputRef.current?.click();
-                  }, 300);
+                  }, 350);
                 }}
-              />
+                className="flex-1 h-9 bg-input/50 border border-border/50 rounded-lg text-xs text-muted-foreground text-left px-3"
+              >
+                Ask Trai anything...
+              </button>
               <Button 
-                type="submit" 
+                type="button" 
                 size="icon"
-                disabled={!input.trim() || isLoading}
+                onClick={() => {
+                  setExpansionState('full');
+                  setTimeout(() => {
+                    chatInputRef.current?.focus();
+                  }, 350);
+                }}
                 className="h-9 w-9 rounded-lg bg-primary hover:bg-primary/90"
               >
-                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                <Send className="h-4 w-4" />
               </Button>
-            </form>
+            </div>
           </div>
         </div>
       </>
