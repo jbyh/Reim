@@ -457,6 +457,39 @@ serve(async (req) => {
       });
     }
 
+    // Fetch portfolio history from Alpaca
+    if (action === 'portfolio_history') {
+      if (!alpacaHeaders) throw new Error('Alpaca credentials required');
+      const period = body.period || '1M';
+      const tf = body.timeframe || '1D';
+      
+      cacheKey = `portfolio_history:${period}:${tf}`;
+      const cached = getCached(cacheKey);
+      if (cached) {
+        return new Response(JSON.stringify({ data: cached, cached: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const url = new URL(`${ALPACA_TRADING_URL}/account/portfolio/history`);
+      url.searchParams.set('period', period);
+      url.searchParams.set('timeframe', tf);
+      url.searchParams.set('intraday_reporting', 'market_hours');
+      url.searchParams.set('pnl_reset', 'per_day');
+
+      const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Alpaca portfolio history error:', response.status, errorText);
+        throw new Error(`Alpaca API error: ${response.status} - ${errorText}`);
+      }
+      const data = await response.json();
+      setCache(cacheKey, data);
+      return new Response(JSON.stringify({ data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Fetch news for a symbol from Alpaca
     if (action === 'news') {
       const newsSymbol = symbol || symbols?.[0];
