@@ -136,6 +136,13 @@ const ChatContent = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [thinkingElapsed, setThinkingElapsed] = useState(0);
 
+  // Thinking timer
+  useEffect(() => {
+    if (!isLoading) { setThinkingElapsed(0); return; }
+    const timer = setInterval(() => setThinkingElapsed(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [isLoading]);
+
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (el) {
