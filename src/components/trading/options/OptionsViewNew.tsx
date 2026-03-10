@@ -86,21 +86,33 @@ export const OptionsViewNew = () => {
   }, [fetchBars]);
 
   // Fetch options chain for a symbol
-  const fetchOptionsChain = useCallback(async (sym: string) => {
+  const fetchOptionsChain = useCallback(async (sym: string, price?: number) => {
     try {
+      const refPrice = price || currentPrice;
+      const body: Record<string, any> = { 
+        action: 'options_chain', 
+        underlying_symbol: sym,
+      };
+      // If we know the price, narrow strikes to ±15% for more relevant contracts
+      if (refPrice > 0) {
+        body.strike_price_gte = Math.floor(refPrice * 0.85);
+        body.strike_price_lte = Math.ceil(refPrice * 1.15);
+      }
+
       const { data, error } = await supabase.functions.invoke('market-data', {
-        body: { action: 'options_chain', underlying_symbol: sym }
+        body
       });
 
       if (!error && data?.data) {
         setOptionsChainCache(data.data);
+        console.log(`Options chain loaded: ${Object.keys(data.data).length} contracts`);
         return data.data;
       }
     } catch (err) {
       console.error('Failed to fetch options chain:', err);
     }
     return null;
-  }, []);
+  }, [currentPrice]);
 
   // Initial load and symbol change
   useEffect(() => {
