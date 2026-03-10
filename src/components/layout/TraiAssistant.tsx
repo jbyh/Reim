@@ -226,7 +226,12 @@ const ChatContent = ({
                       ) : isLoading ? (
                         <span className="flex items-center gap-2 text-xs">
                           <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                          <span className="text-muted-foreground">Thinking...</span>
+                          <span className="text-muted-foreground">
+                            {thinkingElapsed < 5 ? 'Thinking...' 
+                              : thinkingElapsed < 15 ? 'Analyzing markets...' 
+                              : thinkingElapsed < 30 ? 'Still working on it...' 
+                              : 'Taking longer than usual — hang tight'}
+                          </span>
                         </span>
                       ) : null
                     ) : (
