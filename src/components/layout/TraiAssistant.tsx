@@ -108,6 +108,9 @@ interface ChatContentProps {
   onConfirmOrder: () => void;
   onCancelOrder: () => void;
   chatInputRef: React.RefObject<HTMLInputElement>;
+  previewAction?: string | null;
+  onConfirmPreview?: () => void;
+  onCancelPreview?: () => void;
   className?: string;
 }
 
