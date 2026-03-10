@@ -355,7 +355,11 @@ serve(async (req) => {
       const underlying = body.underlying_symbol;
       if (!underlying) throw new Error('underlying_symbol is required');
       
-      cacheKey = `options_chain:${underlying}:${body.expiration_date || ''}:${body.type || ''}`;
+      // Build a smart strike range around current price if not provided
+      const strikeLower = body.strike_price_gte ? String(body.strike_price_gte) : undefined;
+      const strikeUpper = body.strike_price_lte ? String(body.strike_price_lte) : undefined;
+      
+      cacheKey = `options_chain:${underlying}:${body.expiration_date_gte || ''}:${body.expiration_date_lte || ''}:${body.type || ''}:${strikeLower || ''}:${strikeUpper || ''}`;
       const cached = getCached(cacheKey);
       if (cached) {
         return new Response(JSON.stringify({ data: cached, cached: true }), {
@@ -363,51 +367,70 @@ serve(async (req) => {
         });
       }
 
-      const url = new URL(`https://data.alpaca.markets/v1beta1/options/snapshots/${underlying}`);
-      url.searchParams.set('feed', 'indicative');
-      url.searchParams.set('limit', '100');
-      if (body.expiration_date) url.searchParams.set('expiration_date', body.expiration_date);
-      if (body.type) url.searchParams.set('type', body.type);
-      if (body.strike_price_gte) url.searchParams.set('strike_price_gte', String(body.strike_price_gte));
-      if (body.strike_price_lte) url.searchParams.set('strike_price_lte', String(body.strike_price_lte));
+      // Fetch up to 2 pages to get more contracts across expiries
+      const allContracts: Record<string, any> = {};
+      let pageToken: string | null = null;
+      const maxPages = 2;
 
-      const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Alpaca options chain error:', response.status, errorText);
-        throw new Error(`Alpaca options API error: ${response.status} - ${errorText}`);
+      for (let page = 0; page < maxPages; page++) {
+        const url = new URL(`https://data.alpaca.markets/v1beta1/options/snapshots/${underlying}`);
+        url.searchParams.set('feed', 'indicative');
+        url.searchParams.set('limit', '100');
+        
+        // Default to today onwards for expiry
+        const today = new Date().toISOString().split('T')[0];
+        url.searchParams.set('expiration_date_gte', body.expiration_date_gte || today);
+        if (body.expiration_date_lte) url.searchParams.set('expiration_date_lte', body.expiration_date_lte);
+        if (body.expiration_date) url.searchParams.set('expiration_date', body.expiration_date);
+        if (body.type) url.searchParams.set('type', body.type);
+        if (strikeLower) url.searchParams.set('strike_price_gte', strikeLower);
+        if (strikeUpper) url.searchParams.set('strike_price_lte', strikeUpper);
+        if (pageToken) url.searchParams.set('page_token', pageToken);
+
+        const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Alpaca options chain error:', response.status, errorText);
+          // If we already got some data on page 1, return what we have
+          if (page > 0 && Object.keys(allContracts).length > 0) break;
+          throw new Error(`Alpaca options API error: ${response.status} - ${errorText}`);
+        }
+        const data = await response.json();
+        
+        // Parse snapshots
+        const snapshots = data.snapshots || {};
+        for (const [occSymbol, snap] of Object.entries(snapshots)) {
+          const s = snap as any;
+          const quote = s.latestQuote || {};
+          const trade = s.latestTrade || {};
+          const greeks = s.greeks || {};
+          allContracts[occSymbol] = {
+            symbol: occSymbol,
+            bid: quote.bp || 0,
+            ask: quote.ap || 0,
+            bidSize: quote.bs || 0,
+            askSize: quote.as || 0,
+            lastPrice: trade.p || 0,
+            volume: trade.s || 0,
+            openInterest: s.openInterest || 0,
+            impliedVolatility: s.impliedVolatility || greeks.iv || 0,
+            greeks: {
+              delta: greeks.delta || 0,
+              gamma: greeks.gamma || 0,
+              theta: greeks.theta || 0,
+              vega: greeks.vega || 0,
+            },
+          };
+        }
+
+        // Check for next page
+        pageToken = data.next_page_token || null;
+        if (!pageToken) break;
       }
-      const data = await response.json();
       
-      // Parse snapshots into a cleaner format
-      const snapshots = data.snapshots || {};
-      const contracts: Record<string, any> = {};
-      for (const [occSymbol, snap] of Object.entries(snapshots)) {
-        const s = snap as any;
-        const quote = s.latestQuote || {};
-        const trade = s.latestTrade || {};
-        const greeks = s.greeks || {};
-        contracts[occSymbol] = {
-          symbol: occSymbol,
-          bid: quote.bp || 0,
-          ask: quote.ap || 0,
-          bidSize: quote.bs || 0,
-          askSize: quote.as || 0,
-          lastPrice: trade.p || 0,
-          volume: trade.s || 0,
-          openInterest: s.openInterest || 0,
-          impliedVolatility: s.impliedVolatility || greeks.iv || 0,
-          greeks: {
-            delta: greeks.delta || 0,
-            gamma: greeks.gamma || 0,
-            theta: greeks.theta || 0,
-            vega: greeks.vega || 0,
-          },
-        };
-      }
-      
-      setCache(cacheKey, contracts);
-      return new Response(JSON.stringify({ data: contracts }), {
+      setCache(cacheKey, allContracts);
+      console.log(`Options chain: ${Object.keys(allContracts).length} contracts for ${underlying}`);
+      return new Response(JSON.stringify({ data: allContracts }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
