@@ -30,30 +30,30 @@ export const DashboardView = ({
 }: DashboardViewProps) => {
   return (
     <div className="h-full overflow-y-auto scrollbar-thin">
-      <div className="p-4 lg:p-6 w-full">
-        {/* Two-column layout: main content + sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 w-full">
+      <div className="p-4 lg:p-6 max-w-[1600px] mx-auto">
+        {/* Two-column grid: main 2/3 + sidebar 1/3 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5">
           
-          {/* Left Column – 2/3 width */}
-          <div className="lg:col-span-2 flex flex-col gap-4 lg:gap-5">
+          {/* Left column — 2/3 */}
+          <div className="lg:col-span-2 flex flex-col gap-4 lg:gap-5 min-w-0">
             {/* Portfolio Chart */}
             <PortfolioValueChart portfolio={portfolio} />
 
             {/* Positions Card */}
-            <div className="glass-card rounded-2xl overflow-hidden flex-1">
-              <div className="p-4 lg:p-5 border-b border-border/40 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-primary/20">
-                    <PieChart className="h-5 w-5 text-primary" />
+            <div className="glass-card rounded-2xl overflow-hidden min-w-0">
+              <div className="p-4 border-b border-border/40 flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 rounded-xl bg-primary/20 shrink-0">
+                    <PieChart className="h-4 w-4 text-primary" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Positions</h3>
-                    <p className="text-xs text-muted-foreground">{positions.length} active</p>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-sm text-foreground">Positions</h3>
+                    <p className="text-[11px] text-muted-foreground">{positions.length} active</p>
                   </div>
                 </div>
                 <button
                   onClick={() => onNavigate('portfolio')}
-                  className="text-xs text-primary hover:underline font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                  className="text-xs text-primary hover:underline font-medium shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1"
                   aria-label="View all positions"
                 >
                   View All
@@ -62,7 +62,7 @@ export const DashboardView = ({
               
               <div className="divide-y divide-border/30">
                 {positions.length === 0 ? (
-                  <div className="p-8 text-center">
+                  <div className="p-6 text-center">
                     <p className="text-muted-foreground text-sm">No open positions</p>
                   </div>
                 ) : (
@@ -70,25 +70,25 @@ export const DashboardView = ({
                     <button
                       key={pos.symbol}
                       onClick={() => { onNavigate('portfolio'); onPositionClick(pos); }}
-                      className="flex items-center justify-between p-4 hover:bg-secondary/30 transition-colors w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={`${pos.symbol} position: ${pos.qty} shares, ${pos.unrealizedPL >= 0 ? 'up' : 'down'} ${Math.abs(pos.unrealizedPLPercent).toFixed(2)}%`}
+                      className="flex items-center justify-between p-3.5 hover:bg-secondary/30 transition-colors w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-w-0"
+                      aria-label={`${pos.symbol}: ${pos.qty} shares, ${pos.unrealizedPL >= 0 ? 'up' : 'down'} ${Math.abs(pos.unrealizedPLPercent).toFixed(2)}%`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className={cn(
-                          "w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0",
+                          "w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0",
                           pos.unrealizedPL >= 0 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
                         )}>
                           {pos.symbol.slice(0, 2)}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-semibold text-foreground truncate">{pos.symbol}</p>
-                          <p className="text-xs text-muted-foreground">{pos.qty} shares</p>
+                          <p className="font-semibold text-sm text-foreground truncate">{pos.symbol}</p>
+                          <p className="text-[11px] text-muted-foreground">{pos.qty} shares</p>
                         </div>
                       </div>
                       <div className="text-right shrink-0 ml-3">
-                        <p className="font-mono font-semibold text-foreground">${pos.marketValue.toLocaleString()}</p>
+                        <p className="font-mono text-sm font-semibold text-foreground">${pos.marketValue.toLocaleString()}</p>
                         <p className={cn(
-                          "text-xs font-medium",
+                          "text-[11px] font-medium",
                           pos.unrealizedPL >= 0 ? "text-success" : "text-destructive"
                         )}>
                           {pos.unrealizedPL >= 0 ? '+' : ''}{pos.unrealizedPLPercent.toFixed(2)}%
@@ -101,9 +101,9 @@ export const DashboardView = ({
             </div>
           </div>
 
-          {/* Right Column – 1/3 width */}
-          <div className="flex flex-col gap-4 lg:gap-5">
-            {/* Trai Greeting */}
+          {/* Right column — 1/3 */}
+          <div className="flex flex-col gap-4 lg:gap-5 min-w-0">
+            {/* Trai Greeting / Insights */}
             <TraiGreeting
               portfolio={portfolio}
               positions={positions}
