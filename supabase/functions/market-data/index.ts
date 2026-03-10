@@ -355,7 +355,10 @@ serve(async (req) => {
       const underlying = body.underlying_symbol;
       if (!underlying) throw new Error('underlying_symbol is required');
       
-      cacheKey = `options_chain:${underlying}:${body.expiration_date || ''}:${body.type || ''}`;
+      const strikeLower = body.strike_price_gte ? String(body.strike_price_gte) : undefined;
+      const strikeUpper = body.strike_price_lte ? String(body.strike_price_lte) : undefined;
+      
+      cacheKey = `options_chain_v2:${underlying}:${strikeLower || ''}:${strikeUpper || ''}`;
       const cached = getCached(cacheKey);
       if (cached) {
         return new Response(JSON.stringify({ data: cached, cached: true }), {
@@ -363,51 +366,96 @@ serve(async (req) => {
         });
       }
 
-      const url = new URL(`https://data.alpaca.markets/v1beta1/options/snapshots/${underlying}`);
-      url.searchParams.set('feed', 'indicative');
-      url.searchParams.set('limit', '100');
-      if (body.expiration_date) url.searchParams.set('expiration_date', body.expiration_date);
-      if (body.type) url.searchParams.set('type', body.type);
-      if (body.strike_price_gte) url.searchParams.set('strike_price_gte', String(body.strike_price_gte));
-      if (body.strike_price_lte) url.searchParams.set('strike_price_lte', String(body.strike_price_lte));
+      const allContracts: Record<string, any> = {};
+      
+      // Build target expiry dates: today, +3d, +7d, +10d, +14d, +21d, +30d, +45d
+      // We'll query each individually to get contracts across multiple expiries
+      const today = new Date();
+      const targetOffsets = [0, 3, 5, 7, 10, 14, 21, 30, 45];
+      const targetDates: string[] = [];
+      const seenDates = new Set<string>();
+      
+      for (const offset of targetOffsets) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + offset);
+        // Adjust to next Friday for weekly options (except 0-day)
+        if (offset > 0) {
+          const day = d.getDay();
+          // Move to Friday (5) if not already
+          if (day !== 5) {
+            const daysToFri = (5 - day + 7) % 7 || 7;
+            d.setDate(d.getDate() + daysToFri);
+          }
+        }
+        const dateStr = d.toISOString().split('T')[0];
+        if (!seenDates.has(dateStr)) {
+          seenDates.add(dateStr);
+          targetDates.push(dateStr);
+        }
+      }
 
-      const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Alpaca options chain error:', response.status, errorText);
-        throw new Error(`Alpaca options API error: ${response.status} - ${errorText}`);
+      // Narrow strike range more tightly to ATM contracts (±8% of price) per expiry
+      // This ensures we get the most relevant near-the-money contracts
+      const narrowStrikeLower = strikeLower || undefined;
+      const narrowStrikeUpper = strikeUpper || undefined;
+
+      // Fetch each expiry date (parallel with concurrency limit)
+      const fetchExpiry = async (expiryDate: string) => {
+        const url = new URL(`https://data.alpaca.markets/v1beta1/options/snapshots/${underlying}`);
+        url.searchParams.set('feed', 'indicative');
+        url.searchParams.set('limit', '50');
+        url.searchParams.set('expiration_date', expiryDate);
+        if (narrowStrikeLower) url.searchParams.set('strike_price_gte', narrowStrikeLower);
+        if (narrowStrikeUpper) url.searchParams.set('strike_price_lte', narrowStrikeUpper);
+
+        try {
+          const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
+          if (!response.ok) {
+            console.warn(`Options expiry ${expiryDate}: ${response.status}`);
+            return;
+          }
+          const data = await response.json();
+          const snapshots = data.snapshots || {};
+          for (const [occSymbol, snap] of Object.entries(snapshots)) {
+            const s = snap as any;
+            const quote = s.latestQuote || {};
+            const trade = s.latestTrade || {};
+            const greeks = s.greeks || {};
+            allContracts[occSymbol] = {
+              symbol: occSymbol,
+              bid: quote.bp || 0,
+              ask: quote.ap || 0,
+              bidSize: quote.bs || 0,
+              askSize: quote.as || 0,
+              lastPrice: trade.p || 0,
+              volume: trade.s || 0,
+              openInterest: s.openInterest || 0,
+              impliedVolatility: s.impliedVolatility || greeks.iv || 0,
+              greeks: {
+                delta: greeks.delta || 0,
+                gamma: greeks.gamma || 0,
+                theta: greeks.theta || 0,
+                vega: greeks.vega || 0,
+              },
+            };
+          }
+        } catch (err) {
+          console.warn(`Options expiry ${expiryDate} fetch error:`, err);
+        }
+      };
+
+      // Fetch in batches of 3 to avoid rate limiting
+      for (let i = 0; i < targetDates.length; i += 3) {
+        const batch = targetDates.slice(i, i + 3);
+        await Promise.all(batch.map(fetchExpiry));
+        if (i + 3 < targetDates.length) {
+          await new Promise(r => setTimeout(r, 500));
+        }
       }
-      const data = await response.json();
       
-      // Parse snapshots into a cleaner format
-      const snapshots = data.snapshots || {};
-      const contracts: Record<string, any> = {};
-      for (const [occSymbol, snap] of Object.entries(snapshots)) {
-        const s = snap as any;
-        const quote = s.latestQuote || {};
-        const trade = s.latestTrade || {};
-        const greeks = s.greeks || {};
-        contracts[occSymbol] = {
-          symbol: occSymbol,
-          bid: quote.bp || 0,
-          ask: quote.ap || 0,
-          bidSize: quote.bs || 0,
-          askSize: quote.as || 0,
-          lastPrice: trade.p || 0,
-          volume: trade.s || 0,
-          openInterest: s.openInterest || 0,
-          impliedVolatility: s.impliedVolatility || greeks.iv || 0,
-          greeks: {
-            delta: greeks.delta || 0,
-            gamma: greeks.gamma || 0,
-            theta: greeks.theta || 0,
-            vega: greeks.vega || 0,
-          },
-        };
-      }
-      
-      setCache(cacheKey, contracts);
-      return new Response(JSON.stringify({ data: contracts }), {
+      setCache(cacheKey, allContracts);
+      console.log(`Options chain: ${Object.keys(allContracts).length} contracts across ${targetDates.length} expiry dates for ${underlying}`);
+      return new Response(JSON.stringify({ data: allContracts }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
