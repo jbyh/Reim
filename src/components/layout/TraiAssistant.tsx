@@ -128,9 +128,13 @@ const ChatContent = ({
   onConfirmOrder,
   onCancelOrder,
   chatInputRef,
+  previewAction,
+  onConfirmPreview,
+  onCancelPreview,
   className = '',
 }: ChatContentProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [thinkingElapsed, setThinkingElapsed] = useState(0);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
