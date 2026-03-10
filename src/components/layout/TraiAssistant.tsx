@@ -269,8 +269,24 @@ const ChatContent = ({
         </div>
       </div>
 
+      {/* Preview Action Bar */}
+      {previewAction && onConfirmPreview && onCancelPreview && (
+        <div className="flex-shrink-0 px-3 py-2.5 border-t border-border/30 bg-secondary/30">
+          <p className="text-[10px] text-muted-foreground mb-1.5">I'll ask Trai:</p>
+          <p className="text-xs font-medium text-foreground mb-2 line-clamp-2">"{previewAction}"</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={onCancelPreview} className="text-[10px] h-7 rounded-lg flex-1">
+              Cancel
+            </Button>
+            <Button size="sm" onClick={onConfirmPreview} className="text-[10px] h-7 rounded-lg flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Send className="h-3 w-3 mr-1" /> Send
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Quick Actions - When messages exist */}
-      {messages.length > 0 && (
+      {messages.length > 0 && !previewAction && (
         <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
           {quickActions.map((qa) => (
             <button
@@ -279,7 +295,7 @@ const ChatContent = ({
               disabled={isLoading}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all",
-                "border bg-secondary/30 hover:bg-secondary",
+                "border bg-secondary/30 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 qa.variant === 'primary' && "border-primary/30 text-primary",
                 qa.variant === 'success' && "border-success/30 text-success",
                 qa.variant === 'warning' && "border-warning/30 text-warning"
