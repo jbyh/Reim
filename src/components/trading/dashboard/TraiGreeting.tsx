@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, TrendingUp, TrendingDown, AlertCircle, Calendar, Send, X } from 'lucide-react';
+import { Sparkles, ArrowRight, TrendingUp, AlertCircle, Calendar, Send, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Position, Portfolio } from '@/types/trading';
@@ -28,7 +28,7 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
       if (portfolio.dayPL > 0) {
         newInsights.push(`You're up $${portfolio.dayPL.toFixed(2)} today (+${portfolio.dayPLPercent.toFixed(2)}%)`);
       } else {
-        newInsights.push(`Your portfolio is down $${Math.abs(portfolio.dayPL).toFixed(2)} today`);
+        newInsights.push(`Portfolio is down $${Math.abs(portfolio.dayPL).toFixed(2)} today`);
       }
     }
 
@@ -44,7 +44,7 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
     }
 
     if (portfolio.buyingPower > 0) {
-      newInsights.push(`You have $${(portfolio.buyingPower / 1000).toFixed(1)}k buying power available`);
+      newInsights.push(`$${(portfolio.buyingPower / 1000).toFixed(1)}k buying power available`);
     }
 
     setInsights(newInsights);
@@ -70,44 +70,40 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden">
-      {/* Header */}
-      <div className="relative px-5 py-6 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent">
+      {/* Header – compact */}
+      <div className="relative px-4 py-4 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent">
         <div className="absolute inset-0 bg-gradient-radial-purple opacity-50" />
-        <div className="relative z-10 flex items-start gap-4">
-          <div className="p-3 rounded-2xl gradient-purple glow-primary">
-            <Sparkles className="h-6 w-6 text-white" />
+        <div className="relative z-10 flex items-start gap-3">
+          <div className="p-2.5 rounded-xl gradient-purple glow-primary shrink-0">
+            <Sparkles className="h-5 w-5 text-white" />
           </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold text-foreground mb-1">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-foreground">
               {greeting}! <span className="text-gradient-purple">I'm Trai</span>
             </h2>
-            <p className="text-sm text-muted-foreground">
-              Your AI trading companion. Here's what's happening:
-            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">Your AI trading companion</p>
           </div>
         </div>
       </div>
 
       {/* Insights */}
-      <div className="px-5 py-4 space-y-3 border-b border-border/30">
-        {insights.length > 0 ? (
-          insights.map((insight, idx) => (
-            <div key={idx} className="flex items-center gap-3 text-sm">
+      {insights.length > 0 && (
+        <div className="px-4 py-3 space-y-2 border-b border-border/30">
+          {insights.map((insight, idx) => (
+            <div key={idx} className="flex items-start gap-2.5 text-sm">
               <div className={cn(
-                "h-2 w-2 rounded-full flex-shrink-0",
+                "h-2 w-2 rounded-full flex-shrink-0 mt-1.5",
                 idx === 0 ? "bg-primary" : idx === 1 ? "bg-success" : "bg-warning"
               )} />
-              <p className="text-foreground">{insight}</p>
+              <p className="text-foreground text-[13px] leading-snug">{insight}</p>
             </div>
-          ))
-        ) : (
-          <p className="text-sm text-muted-foreground">Loading your insights...</p>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Quick Actions */}
-      <div className="p-4 space-y-2">
-        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 font-medium">Quick Actions</p>
+      <div className="p-3 space-y-1.5">
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 font-medium px-1">Quick Actions</p>
         
         {previewAction ? (
           <div className="rounded-xl bg-secondary/50 p-3 space-y-2">
@@ -123,32 +119,20 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
             </div>
           </div>
         ) : (
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             {quickActions.map((action) => (
               <button
                 key={action.label}
                 onClick={() => handleQuickAction(action.label)}
-                className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-all group text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex items-center gap-2.5 p-2.5 rounded-lg bg-secondary/40 hover:bg-secondary/70 transition-all group text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <action.icon className="h-4 w-4 text-primary" />
-                <span className="text-sm text-foreground flex-1">{action.label}</span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                <action.icon className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-[13px] text-foreground flex-1">{action.label}</span>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
             ))}
           </div>
         )}
-      </div>
-
-      {/* Chat Button */}
-      <div className="px-4 pb-4">
-        <Button 
-          onClick={onNavigateToChat}
-          variant="outline" 
-          className="w-full border-primary/30 text-primary hover:bg-primary/10"
-        >
-          <Sparkles className="h-4 w-4 mr-2" />
-          Chat with Trai
-        </Button>
       </div>
     </div>
   );
