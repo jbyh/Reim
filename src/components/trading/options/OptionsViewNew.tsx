@@ -293,7 +293,7 @@ export const OptionsViewNew = () => {
               Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
             <button 
-              onClick={() => { fetchPrice(symbol); fetchOptionsChain(symbol); }}
+              onClick={() => { fetchPrice(symbol); fetchOptionsChain(symbol, currentPrice); }}
               disabled={isLoading}
               className="p-1 hover:bg-secondary rounded"
             >
