@@ -49,6 +49,8 @@ export const ChatPanel = ({
     inputRef.current?.focus();
   };
 
+  const [previewAction, setPreviewAction] = useState<string | null>(null);
+
   const quickActions = [
     { label: 'Buy NVDA', action: 'buy 5 NVDA', variant: 'buy' as const },
     { label: 'Sell TSLA', action: 'sell 10 TSLA', variant: 'sell' as const },
@@ -141,26 +143,48 @@ export const ChatPanel = ({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Quick Action Preview */}
+      {previewAction && (
+        <div className="px-5 py-3 border-t border-border/30 bg-secondary/30">
+          <p className="text-xs text-muted-foreground mb-2">I'll ask Trai:</p>
+          <p className="text-sm font-medium text-foreground mb-3">"{previewAction}"</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => setPreviewAction(null)} className="text-xs rounded-xl">
+              Cancel
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={() => { onSendMessage(previewAction); setPreviewAction(null); }}
+              className="text-xs rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              <Send className="h-3 w-3 mr-1" /> Send
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Quick Actions */}
-      <div className="px-5 py-3 border-t border-border/30 flex gap-2 overflow-x-auto scrollbar-thin">
-        {quickActions.map((qa) => (
-          <Button
-            key={qa.label}
-            variant="outline"
-            size="sm"
-            className={cn(
-              "text-xs whitespace-nowrap rounded-xl font-semibold transition-all duration-200",
-              qa.variant === 'buy' && "border-success/50 text-success hover:bg-success/10 hover:border-success",
-              qa.variant === 'sell' && "border-destructive/50 text-destructive hover:bg-destructive/10 hover:border-destructive",
-              qa.variant === 'neutral' && "border-highlight/50 text-highlight hover:bg-highlight/10 hover:border-highlight"
-            )}
-            onClick={() => onSendMessage(qa.action)}
-            disabled={isLoading}
-          >
-            {qa.label}
-          </Button>
-        ))}
-      </div>
+      {!previewAction && (
+        <div className="px-5 py-3 border-t border-border/30 flex gap-2 overflow-x-auto scrollbar-thin">
+          {quickActions.map((qa) => (
+            <Button
+              key={qa.label}
+              variant="outline"
+              size="sm"
+              className={cn(
+                "text-xs whitespace-nowrap rounded-xl font-semibold transition-all duration-200",
+                qa.variant === 'buy' && "border-success/50 text-success hover:bg-success/10 hover:border-success",
+                qa.variant === 'sell' && "border-destructive/50 text-destructive hover:bg-destructive/10 hover:border-destructive",
+                qa.variant === 'neutral' && "border-highlight/50 text-highlight hover:bg-highlight/10 hover:border-highlight"
+              )}
+              onClick={() => setPreviewAction(qa.action)}
+              disabled={isLoading}
+            >
+              {qa.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {/* Input */}
       <div className="p-5 border-t border-border/30 bg-card/50">

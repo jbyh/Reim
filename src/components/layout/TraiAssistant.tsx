@@ -108,6 +108,9 @@ interface ChatContentProps {
   onConfirmOrder: () => void;
   onCancelOrder: () => void;
   chatInputRef: React.RefObject<HTMLInputElement>;
+  previewAction?: string | null;
+  onConfirmPreview?: () => void;
+  onCancelPreview?: () => void;
   className?: string;
 }
 
@@ -125,9 +128,20 @@ const ChatContent = ({
   onConfirmOrder,
   onCancelOrder,
   chatInputRef,
+  previewAction,
+  onConfirmPreview,
+  onCancelPreview,
   className = '',
 }: ChatContentProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [thinkingElapsed, setThinkingElapsed] = useState(0);
+
+  // Thinking timer
+  useEffect(() => {
+    if (!isLoading) { setThinkingElapsed(0); return; }
+    const timer = setInterval(() => setThinkingElapsed(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [isLoading]);
 
   useEffect(() => {
     const el = scrollContainerRef.current;
@@ -212,7 +226,12 @@ const ChatContent = ({
                       ) : isLoading ? (
                         <span className="flex items-center gap-2 text-xs">
                           <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                          <span className="text-muted-foreground">Thinking...</span>
+                          <span className="text-muted-foreground">
+                            {thinkingElapsed < 5 ? 'Thinking...' 
+                              : thinkingElapsed < 15 ? 'Analyzing markets...' 
+                              : thinkingElapsed < 30 ? 'Still working on it...' 
+                              : 'Taking longer than usual — hang tight'}
+                          </span>
                         </span>
                       ) : null
                     ) : (
@@ -250,8 +269,24 @@ const ChatContent = ({
         </div>
       </div>
 
+      {/* Preview Action Bar */}
+      {previewAction && onConfirmPreview && onCancelPreview && (
+        <div className="flex-shrink-0 px-3 py-2.5 border-t border-border/30 bg-secondary/30">
+          <p className="text-[10px] text-muted-foreground mb-1.5">I'll ask Trai:</p>
+          <p className="text-xs font-medium text-foreground mb-2 line-clamp-2">"{previewAction}"</p>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={onCancelPreview} className="text-[10px] h-7 rounded-lg flex-1">
+              Cancel
+            </Button>
+            <Button size="sm" onClick={onConfirmPreview} className="text-[10px] h-7 rounded-lg flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Send className="h-3 w-3 mr-1" /> Send
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Quick Actions - When messages exist */}
-      {messages.length > 0 && (
+      {messages.length > 0 && !previewAction && (
         <div className="flex-shrink-0 px-3 py-2 border-t border-border/30 flex gap-1.5 overflow-x-auto scrollbar-thin">
           {quickActions.map((qa) => (
             <button
@@ -260,7 +295,7 @@ const ChatContent = ({
               disabled={isLoading}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-all",
-                "border bg-secondary/30 hover:bg-secondary",
+                "border bg-secondary/30 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 qa.variant === 'primary' && "border-primary/30 text-primary",
                 qa.variant === 'success' && "border-success/30 text-success",
                 qa.variant === 'warning' && "border-warning/30 text-warning"
@@ -339,6 +374,7 @@ export const TraiAssistant = ({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [showConfirmAnimation, setShowConfirmAnimation] = useState(false);
+  const [previewAction, setPreviewAction] = useState<string | null>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -438,11 +474,23 @@ export const TraiAssistant = ({
       onCancelOrder();
       return;
     }
-    onSendMessage(action);
+    // Show preview instead of immediately sending
+    setPreviewAction(action);
     if (expansionState === 'collapsed' && !isFullPage) {
       setExpansionState('full');
     }
-  }, [onConfirmOrder, onCancelOrder, onSendMessage, expansionState, isFullPage]);
+  }, [onConfirmOrder, onCancelOrder, expansionState, isFullPage]);
+
+  const confirmPreviewAction = useCallback(() => {
+    if (previewAction) {
+      onSendMessage(previewAction);
+      setPreviewAction(null);
+    }
+  }, [previewAction, onSendMessage]);
+
+  const cancelPreviewAction = useCallback(() => {
+    setPreviewAction(null);
+  }, []);
 
   const toggleExpansion = () => {
     if (expansionState === 'collapsed') {
@@ -469,6 +517,9 @@ export const TraiAssistant = ({
     onConfirmOrder,
     onCancelOrder,
     chatInputRef,
+    previewAction,
+    onConfirmPreview: confirmPreviewAction,
+    onCancelPreview: cancelPreviewAction,
   };
 
   // ── Full page mode (dedicated chat tab) ──

@@ -34,7 +34,7 @@ export interface Order {
   limitPrice?: number;
   stopLoss?: number;
   takeProfit?: number;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'filled';
+  status: 'draft' | 'pending' | 'confirmed' | 'cancelled' | 'filled' | 'rejected';
   timestamp: Date;
 }
 
@@ -69,7 +69,9 @@ export interface Portfolio {
 export interface Activity {
   id: string;
   activity_type: string;
-  transaction_time: string;
+  transaction_time?: string;
+  date?: string;
+  created_at?: string;
   symbol?: string;
   side?: string;
   qty?: string;
@@ -77,6 +79,16 @@ export interface Activity {
   net_amount?: string;
   description?: string;
   status?: string;
+  activity_sub_type?: string;
+  order_status?: string;
+  type?: string;
+  cum_qty?: string;
+  leaves_qty?: string;
+  order_id?: string;
+  execution_id?: string;
+  group_id?: string;
+  cusip?: string;
+  currency?: string;
 }
 
 export interface BarData {

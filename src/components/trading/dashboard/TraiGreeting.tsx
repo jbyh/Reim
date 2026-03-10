@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, TrendingUp, TrendingDown, AlertCircle, Calendar } from 'lucide-react';
+import { Sparkles, ArrowRight, TrendingUp, TrendingDown, AlertCircle, Calendar, Send, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Position, Portfolio } from '@/types/trading';
@@ -14,6 +14,7 @@ interface TraiGreetingProps {
 export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat }: TraiGreetingProps) => {
   const [greeting, setGreeting] = useState('Good morning');
   const [insights, setInsights] = useState<string[]>([]);
+  const [previewAction, setPreviewAction] = useState<string | null>(null);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -21,10 +22,8 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
     else if (hour < 17) setGreeting('Good afternoon');
     else setGreeting('Good evening');
 
-    // Generate dynamic insights
     const newInsights: string[] = [];
     
-    // Portfolio performance insight
     if (portfolio.dayPL !== 0) {
       if (portfolio.dayPL > 0) {
         newInsights.push(`You're up $${portfolio.dayPL.toFixed(2)} today (+${portfolio.dayPLPercent.toFixed(2)}%)`);
@@ -33,7 +32,6 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
       }
     }
 
-    // Top mover insight
     const topMover = [...positions].sort((a, b) => 
       Math.abs(b.unrealizedPLPercent) - Math.abs(a.unrealizedPLPercent)
     )[0];
@@ -45,7 +43,6 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
       }
     }
 
-    // Buying power insight
     if (portfolio.buyingPower > 0) {
       newInsights.push(`You have $${(portfolio.buyingPower / 1000).toFixed(1)}k buying power available`);
     }
@@ -58,6 +55,18 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
     { label: "Review my portfolio", icon: AlertCircle },
     { label: "Find options plays", icon: Calendar },
   ];
+
+  const handleQuickAction = (label: string) => {
+    setPreviewAction(label);
+  };
+
+  const confirmAction = () => {
+    if (previewAction) {
+      onAskTrai(previewAction);
+      onNavigateToChat();
+      setPreviewAction(null);
+    }
+  };
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden">
@@ -83,10 +92,7 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
       <div className="px-5 py-4 space-y-3 border-b border-border/30">
         {insights.length > 0 ? (
           insights.map((insight, idx) => (
-            <div 
-              key={idx}
-              className="flex items-center gap-3 text-sm"
-            >
+            <div key={idx} className="flex items-center gap-3 text-sm">
               <div className={cn(
                 "h-2 w-2 rounded-full flex-shrink-0",
                 idx === 0 ? "bg-primary" : idx === 1 ? "bg-success" : "bg-warning"
@@ -102,22 +108,35 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
       {/* Quick Actions */}
       <div className="p-4 space-y-2">
         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 font-medium">Quick Actions</p>
-        <div className="grid gap-2">
-          {quickActions.map((action) => (
-            <button
-              key={action.label}
-              onClick={() => {
-                onAskTrai(action.label);
-                onNavigateToChat();
-              }}
-              className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-all group text-left w-full"
-            >
-              <action.icon className="h-4 w-4 text-primary" />
-              <span className="text-sm text-foreground flex-1">{action.label}</span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-            </button>
-          ))}
-        </div>
+        
+        {previewAction ? (
+          <div className="rounded-xl bg-secondary/50 p-3 space-y-2">
+            <p className="text-[11px] text-muted-foreground">I'll ask Trai:</p>
+            <p className="text-sm font-medium text-foreground">"{previewAction}"</p>
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" variant="outline" onClick={() => setPreviewAction(null)} className="flex-1 text-xs h-8 rounded-lg">
+                <X className="h-3 w-3 mr-1" /> Cancel
+              </Button>
+              <Button size="sm" onClick={confirmAction} className="flex-1 text-xs h-8 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Send className="h-3 w-3 mr-1" /> Send
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            {quickActions.map((action) => (
+              <button
+                key={action.label}
+                onClick={() => handleQuickAction(action.label)}
+                className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50 hover:bg-secondary transition-all group text-left w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <action.icon className="h-4 w-4 text-primary" />
+                <span className="text-sm text-foreground flex-1">{action.label}</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Chat Button */}
