@@ -81,7 +81,7 @@ export const WatchlistSearch = ({ onAddSymbol, existingSymbols }: WatchlistSearc
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const fetchPrice = useCallback(async (symbol: string): Promise<SearchResult | null> => {
     try {

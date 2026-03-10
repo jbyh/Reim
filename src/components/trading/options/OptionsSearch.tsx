@@ -49,7 +49,7 @@ export const OptionsSearch = ({ onSymbolChange, currentSymbol }: OptionsSearchPr
   const [isOpen, setIsOpen] = useState(false);
   const [popularPrices, setPopularPrices] = useState<SearchResult[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const hasFetchedPopular = useRef(false);
 
   // Fetch prices for popular symbols once
