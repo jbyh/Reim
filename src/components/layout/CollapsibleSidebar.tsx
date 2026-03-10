@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState } from 'react';
 import { 
   LayoutDashboard, 
   TrendingUp, 
@@ -15,6 +14,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Portfolio } from '@/types/trading';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 type TabType = 'dashboard' | 'watchlist' | 'portfolio' | 'options' | 'history' | 'chat' | 'floor';
 
@@ -45,115 +49,153 @@ export const CollapsibleSidebar = ({
   const dailyPL = portfolio.dayPL;
   const dailyPLPercent = portfolio.dayPLPercent;
 
+  const NavButton = ({ item }: { item: typeof navItems[0] }) => {
+    const isActive = activeTab === item.id;
+    const button = (
+      <button
+        onClick={() => onTabChange(item.id)}
+        aria-label={item.label}
+        aria-current={isActive ? 'page' : undefined}
+        className={cn(
+          "relative w-full flex items-center gap-3 rounded-xl transition-all duration-200",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          isCollapsed ? "h-10 w-10 justify-center mx-auto" : "px-3 py-2.5",
+          isActive
+            ? "bg-primary/15 text-primary"
+            : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+        )}
+      >
+        {isActive && (
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-primary" />
+        )}
+        <item.icon className="h-[18px] w-[18px] shrink-0" />
+        {!isCollapsed && (
+          <span className="text-sm font-medium truncate">{item.label}</span>
+        )}
+      </button>
+    );
+
+    if (isCollapsed) {
+      return (
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            {item.label}
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+    return button;
+  };
+
   return (
     <aside 
       className={cn(
-        "h-full bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-300 ease-in-out",
-        isCollapsed ? "w-[72px]" : "w-64"
+        "h-full bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-200 ease-in-out overflow-hidden",
+        isCollapsed ? "w-[56px]" : "w-[200px]"
       )}
     >
       {/* Logo */}
       <div className={cn(
-        "border-b border-sidebar-border flex items-center transition-all duration-300",
-        isCollapsed ? "p-3 justify-center" : "p-5"
+        "flex items-center border-b border-sidebar-border shrink-0",
+        isCollapsed ? "h-14 justify-center" : "h-14 px-3 gap-2.5"
       )}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl gradient-purple flex items-center justify-center flex-shrink-0">
-            <TrendingUp className="h-5 w-5 text-white" />
-          </div>
-          {!isCollapsed && (
-            <span className="font-bold text-xl text-foreground whitespace-nowrap overflow-hidden">
-              TrAide
-            </span>
-          )}
+        <div className="w-8 h-8 rounded-lg gradient-purple flex items-center justify-center shrink-0">
+          <TrendingUp className="h-4 w-4 text-white" />
         </div>
+        {!isCollapsed && (
+          <span className="font-bold text-base text-foreground truncate">TrAide</span>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className={cn(
-        "flex-1 space-y-1 overflow-y-auto scrollbar-thin",
-        isCollapsed ? "px-2 py-4" : "px-3 py-4"
-      )}>
+      <nav
+        className={cn(
+          "flex-1 flex flex-col gap-1 py-3 overflow-y-auto scrollbar-thin",
+          isCollapsed ? "px-2" : "px-2"
+        )}
+        role="navigation"
+        aria-label="Main navigation"
+      >
         {!isCollapsed && (
-          <p className="px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Main Menu
+          <p className="px-3 pb-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Menu
           </p>
         )}
         {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onTabChange(item.id)}
-            title={isCollapsed ? item.label : undefined}
-            className={cn(
-              "w-full flex items-center gap-3 rounded-xl text-muted-foreground transition-all duration-200 hover:bg-secondary/60 hover:text-foreground",
-              isCollapsed ? "p-3 justify-center" : "px-4 py-3",
-              activeTab === item.id && "bg-primary/15 text-primary border border-primary/20"
-            )}
-          >
-            <item.icon className={cn("flex-shrink-0", isCollapsed ? "h-5 w-5" : "h-5 w-5")} />
-            {!isCollapsed && (
-              <span className="font-medium whitespace-nowrap overflow-hidden">{item.label}</span>
-            )}
-          </button>
+          <NavButton key={item.id} item={item} />
         ))}
       </nav>
 
-      {/* Collapse Toggle */}
+      {/* Account summary */}
       <div className={cn(
-        "border-t border-sidebar-border",
+        "border-t border-sidebar-border shrink-0",
         isCollapsed ? "p-2" : "p-3"
       )}>
-        <button
-          onClick={onToggleCollapse}
-          className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-secondary/40 hover:bg-secondary/60 transition-colors text-muted-foreground hover:text-foreground"
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <>
-              <ChevronLeft className="h-4 w-4" />
-              <span className="text-sm font-medium">Collapse</span>
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Account Card - Only when expanded */}
-      {!isCollapsed && (
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="balance-card">
-            <div className="relative z-10">
-              <p className="text-xs text-white/70 mb-1">Account Value</p>
-              <p className="font-mono text-xl font-bold text-white mb-2">
-                ${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-              </p>
+        {isCollapsed ? (
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
               <div className={cn(
-                "inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold",
-                dailyPL >= 0 ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
+                "w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-[10px] font-bold font-mono cursor-default",
+                dailyPL >= 0 ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"
               )}>
-                {dailyPL >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                {dailyPL >= 0 ? '+' : ''}{dailyPLPercent.toFixed(2)}%
+                {dailyPL >= 0 ? '+' : ''}{dailyPLPercent.toFixed(1)}%
               </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              <p className="font-mono font-semibold">${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+              <p className="text-[10px] text-muted-foreground">Account Value</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <div className="rounded-xl bg-secondary/40 p-3 space-y-1">
+            <p className="text-[10px] text-muted-foreground font-medium">Account Value</p>
+            <p className="font-mono text-sm font-bold text-foreground">
+              ${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            </p>
+            <div className={cn(
+              "inline-flex items-center gap-1 text-[10px] font-semibold",
+              dailyPL >= 0 ? "text-success" : "text-destructive"
+            )}>
+              {dailyPL >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+              {dailyPL >= 0 ? '+' : ''}{dailyPLPercent.toFixed(2)}% today
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Mini Account Card when collapsed */}
-      {isCollapsed && (
-        <div className="p-2 border-t border-sidebar-border">
-          <div className={cn(
-            "rounded-xl p-2 flex items-center justify-center",
-            dailyPL >= 0 ? "bg-success/20" : "bg-destructive/20"
-          )}>
-            {dailyPL >= 0 ? (
-              <ArrowUpRight className="h-4 w-4 text-success" />
-            ) : (
-              <ArrowDownRight className="h-4 w-4 text-destructive" />
-            )}
-          </div>
-        </div>
-      )}
+      {/* Collapse toggle — always at the very bottom */}
+      <div className={cn(
+        "border-t border-sidebar-border shrink-0",
+        isCollapsed ? "p-2" : "px-3 py-2"
+      )}>
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onToggleCollapse}
+              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 rounded-lg transition-colors",
+                "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isCollapsed ? "h-9 w-10 mx-auto" : "h-8 px-3"
+              )}
+            >
+              {isCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <>
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="text-xs font-medium">Collapse</span>
+                </>
+              )}
+            </button>
+          </TooltipTrigger>
+          {isCollapsed && (
+            <TooltipContent side="right" sideOffset={8}>Expand</TooltipContent>
+          )}
+        </Tooltip>
+      </div>
     </aside>
   );
 };
