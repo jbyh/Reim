@@ -49,6 +49,8 @@ export const ChatPanel = ({
     inputRef.current?.focus();
   };
 
+  const [previewAction, setPreviewAction] = useState<string | null>(null);
+
   const quickActions = [
     { label: 'Buy NVDA', action: 'buy 5 NVDA', variant: 'buy' as const },
     { label: 'Sell TSLA', action: 'sell 10 TSLA', variant: 'sell' as const },
