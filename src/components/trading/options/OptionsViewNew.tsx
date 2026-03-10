@@ -118,8 +118,14 @@ export const OptionsViewNew = () => {
   useEffect(() => {
     fetchPrice(symbol);
     loadBars(symbol);
-    fetchOptionsChain(symbol);
-  }, [symbol, fetchPrice, loadBars, fetchOptionsChain]);
+  }, [symbol, fetchPrice, loadBars]);
+
+  // Fetch options chain after we have a price
+  useEffect(() => {
+    if (currentPrice > 0) {
+      fetchOptionsChain(symbol, currentPrice);
+    }
+  }, [symbol, currentPrice, fetchOptionsChain]);
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
