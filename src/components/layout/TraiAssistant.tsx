@@ -501,6 +501,9 @@ export const TraiAssistant = ({
     onConfirmOrder,
     onCancelOrder,
     chatInputRef,
+    previewAction,
+    onConfirmPreview: confirmPreviewAction,
+    onCancelPreview: cancelPreviewAction,
   };
 
   // ── Full page mode (dedicated chat tab) ──
