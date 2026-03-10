@@ -339,6 +339,7 @@ export const TraiAssistant = ({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [input, setInput] = useState('');
   const [showConfirmAnimation, setShowConfirmAnimation] = useState(false);
+  const [previewAction, setPreviewAction] = useState<string | null>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
