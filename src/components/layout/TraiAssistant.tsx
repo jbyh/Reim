@@ -439,11 +439,23 @@ export const TraiAssistant = ({
       onCancelOrder();
       return;
     }
-    onSendMessage(action);
+    // Show preview instead of immediately sending
+    setPreviewAction(action);
     if (expansionState === 'collapsed' && !isFullPage) {
       setExpansionState('full');
     }
-  }, [onConfirmOrder, onCancelOrder, onSendMessage, expansionState, isFullPage]);
+  }, [onConfirmOrder, onCancelOrder, expansionState, isFullPage]);
+
+  const confirmPreviewAction = useCallback(() => {
+    if (previewAction) {
+      onSendMessage(previewAction);
+      setPreviewAction(null);
+    }
+  }, [previewAction, onSendMessage]);
+
+  const cancelPreviewAction = useCallback(() => {
+    setPreviewAction(null);
+  }, []);
 
   const toggleExpansion = () => {
     if (expansionState === 'collapsed') {
