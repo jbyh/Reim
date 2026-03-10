@@ -87,15 +87,23 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
 
   const isPositive = periodChange.value >= 0;
 
-  const minValue = chartData ? Math.min(...chartData.map(d => d.value)) * 0.995 : 0;
-  const maxValue = chartData ? Math.max(...chartData.map(d => d.value)) * 1.005 : 100;
+  // Better Y-axis: give ~2% padding so flat lines still show shape
+  const yDomain = useMemo(() => {
+    if (!chartData || chartData.length === 0) return [0, 100];
+    const values = chartData.map(d => d.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    const padding = range > 0 ? range * 0.15 : max * 0.02; // 15% padding, or 2% if flat
+    return [Math.floor(min - padding), Math.ceil(max + padding)];
+  }, [chartData]);
 
   return (
-    <div className="glass-card rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-4">
+    <div className="glass-card rounded-2xl p-4 lg:p-5">
+      <div className="flex items-center justify-between mb-3">
         <div>
-          <p className="text-sm text-muted-foreground mb-1">Portfolio Value</p>
-          <p className="text-2xl font-bold font-mono text-foreground">
+          <p className="text-xs text-muted-foreground mb-0.5">Portfolio Value</p>
+          <p className="text-2xl lg:text-3xl font-bold font-mono text-foreground">
             ${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
         </div>
@@ -109,13 +117,15 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
       </div>
 
       {/* Period selector */}
-      <div className="flex gap-1 mb-3">
+      <div className="flex gap-1 mb-3" role="tablist" aria-label="Chart period">
         {PERIODS.map(p => (
           <button
             key={p.key}
+            role="tab"
+            aria-selected={selectedPeriod === p.key}
             onClick={() => setSelectedPeriod(p.key)}
             className={cn(
-              "px-3 py-1 rounded-lg text-xs font-medium transition-colors",
+              "px-3 py-1 rounded-lg text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               selectedPeriod === p.key
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-secondary"
@@ -126,7 +136,8 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
         ))}
       </div>
 
-      <div className="h-40">
+      {/* Chart – taller for visual impact */}
+      <div className="h-48 lg:h-56">
         {isLoading ? (
           <div className="h-full flex items-center justify-center">
             <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -137,7 +148,7 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop
@@ -160,7 +171,14 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
                 interval="preserveStartEnd"
                 minTickGap={50}
               />
-              <YAxis domain={[minValue, maxValue]} hide />
+              <YAxis
+                domain={yDomain}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: 'hsl(215, 20%, 45%)', fontSize: 9 }}
+                tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
+                width={48}
+              />
               <Tooltip
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
@@ -189,9 +207,9 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-border/30">
+      <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t border-border/30">
         <div className="text-center">
-          <p className="text-xs text-muted-foreground mb-1">Period P&L</p>
+          <p className="text-[10px] text-muted-foreground mb-0.5">Period P&L</p>
           <p className={cn(
             "text-sm font-semibold font-mono",
             periodChange.value >= 0 ? "text-success" : "text-destructive"
@@ -200,13 +218,13 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
           </p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-muted-foreground mb-1">Cash</p>
+          <p className="text-[10px] text-muted-foreground mb-0.5">Cash</p>
           <p className="text-sm font-semibold font-mono text-foreground">
             ${(portfolio.cash / 1000).toFixed(1)}k
           </p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-muted-foreground mb-1">Buying Power</p>
+          <p className="text-[10px] text-muted-foreground mb-0.5">Buying Power</p>
           <p className="text-sm font-semibold font-mono text-foreground">
             ${(portfolio.buyingPower / 1000).toFixed(1)}k
           </p>

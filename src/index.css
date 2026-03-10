@@ -247,6 +247,10 @@
     @apply bg-primary/15 text-primary border border-primary/20;
   }
 
+  .sidebar-nav-item:not(.active):hover {
+    box-shadow: 0 0 0 1px hsl(var(--border));
+  }
+
   /* Balance card styles */
   .balance-card {
     @apply relative overflow-hidden rounded-2xl p-6;
