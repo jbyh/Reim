@@ -59,10 +59,10 @@ export const CollapsibleSidebar = ({
         className={cn(
           "relative w-full flex items-center gap-3 rounded-xl transition-all duration-200",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          isCollapsed ? "h-10 w-10 justify-center mx-auto" : "px-3 py-2.5",
+          isCollapsed ? "h-10 w-10 justify-center mx-auto" : "px-3 py-2",
           isActive
             ? "bg-primary/15 text-primary"
-            : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+            : "text-muted-foreground hover:text-foreground hover:bg-secondary/50 hover:scale-[1.03]"
         )}
       >
         {isActive && (
@@ -92,33 +92,33 @@ export const CollapsibleSidebar = ({
     <aside 
       className={cn(
         "h-full bg-sidebar border-r border-sidebar-border flex flex-col transition-all duration-200 ease-in-out overflow-hidden",
-        isCollapsed ? "w-[56px]" : "w-[200px]"
+        isCollapsed ? "w-[52px]" : "w-[180px]"
       )}
     >
       {/* Logo */}
       <div className={cn(
         "flex items-center border-b border-sidebar-border shrink-0",
-        isCollapsed ? "h-14 justify-center" : "h-14 px-3 gap-2.5"
+        isCollapsed ? "h-14 justify-center" : "h-14 px-3 gap-2"
       )}>
         <div className="w-8 h-8 rounded-lg gradient-purple flex items-center justify-center shrink-0">
           <TrendingUp className="h-4 w-4 text-white" />
         </div>
         {!isCollapsed && (
-          <span className="font-bold text-base text-foreground truncate">TrAide</span>
+          <span className="font-bold text-sm text-foreground truncate">TrAide</span>
         )}
       </div>
 
       {/* Navigation */}
       <nav
         className={cn(
-          "flex-1 flex flex-col gap-1 py-3 overflow-y-auto scrollbar-thin",
-          isCollapsed ? "px-2" : "px-2"
+          "flex-1 flex flex-col gap-0.5 py-2 overflow-y-auto scrollbar-thin",
+          isCollapsed ? "px-1.5" : "px-2"
         )}
         role="navigation"
         aria-label="Main navigation"
       >
         {!isCollapsed && (
-          <p className="px-3 pb-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+          <p className="px-3 pb-1 text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">
             Menu
           </p>
         )}
@@ -130,7 +130,7 @@ export const CollapsibleSidebar = ({
       {/* Account summary */}
       <div className={cn(
         "border-t border-sidebar-border shrink-0",
-        isCollapsed ? "p-2" : "p-3"
+        isCollapsed ? "p-1.5" : "p-2.5"
       )}>
         {isCollapsed ? (
           <Tooltip delayDuration={0}>
@@ -148,9 +148,9 @@ export const CollapsibleSidebar = ({
             </TooltipContent>
           </Tooltip>
         ) : (
-          <div className="rounded-xl bg-secondary/40 p-3 space-y-1">
-            <p className="text-[10px] text-muted-foreground font-medium">Account Value</p>
-            <p className="font-mono text-sm font-bold text-foreground">
+          <div className="rounded-xl bg-secondary/40 p-2.5 space-y-0.5">
+            <p className="text-[9px] text-muted-foreground font-medium">Account Value</p>
+            <p className="font-mono text-xs font-bold text-foreground">
               ${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </p>
             <div className={cn(
@@ -164,10 +164,10 @@ export const CollapsibleSidebar = ({
         )}
       </div>
 
-      {/* Collapse toggle — always at the very bottom */}
+      {/* Collapse toggle */}
       <div className={cn(
         "border-t border-sidebar-border shrink-0",
-        isCollapsed ? "p-2" : "px-3 py-2"
+        isCollapsed ? "p-1.5" : "px-2.5 py-1.5"
       )}>
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
@@ -178,15 +178,15 @@ export const CollapsibleSidebar = ({
                 "w-full flex items-center justify-center gap-2 rounded-lg transition-colors",
                 "text-muted-foreground hover:text-foreground hover:bg-secondary/50",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isCollapsed ? "h-9 w-10 mx-auto" : "h-8 px-3"
+                isCollapsed ? "h-8 w-10 mx-auto" : "h-7 px-3"
               )}
             >
               {isCollapsed ? (
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-3.5 w-3.5" />
               ) : (
                 <>
-                  <ChevronLeft className="h-4 w-4" />
-                  <span className="text-xs font-medium">Collapse</span>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <span className="text-[10px] font-medium">Collapse</span>
                 </>
               )}
             </button>
