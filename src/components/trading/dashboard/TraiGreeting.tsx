@@ -17,7 +17,7 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
 
   useEffect(() => {
     const newInsights: string[] = [];
-    
+
     if (portfolio.dayPL !== 0) {
       if (portfolio.dayPL > 0) {
         newInsights.push(`Up $${portfolio.dayPL.toFixed(2)} today (+${portfolio.dayPLPercent.toFixed(2)}%)`);
@@ -26,7 +26,7 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
       }
     }
 
-    const topMover = [...positions].sort((a, b) => 
+    const topMover = [...positions].sort((a, b) =>
       Math.abs(b.unrealizedPLPercent) - Math.abs(a.unrealizedPLPercent)
     )[0];
     if (topMover) {
@@ -38,7 +38,7 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
     }
 
     if (portfolio.buyingPower > 0) {
-      newInsights.push(`$${(portfolio.buyingPower / 1000).toFixed(1)}k buying power available`);
+      newInsights.push(`$${(portfolio.buyingPower / 1000).toFixed(1)}k buying power`);
     }
 
     setInsights(newInsights);
@@ -63,25 +63,25 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
   };
 
   return (
-    <div className="glass-card rounded-2xl overflow-hidden">
+    <div className="glass-card rounded-2xl overflow-hidden h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-2.5 px-3.5 py-3 bg-gradient-to-r from-primary/10 to-transparent">
-        <div className="p-2 rounded-lg gradient-purple shrink-0">
-          <Sparkles className="h-4 w-4 text-white" />
+      <div className="flex items-center gap-2 px-3 py-2.5 bg-gradient-to-r from-primary/10 to-transparent">
+        <div className="p-1.5 rounded-lg gradient-purple shrink-0">
+          <Sparkles className="h-3.5 w-3.5 text-white" />
         </div>
         <div className="min-w-0">
-          <h2 className="text-sm font-bold text-foreground truncate">Trai Insights</h2>
+          <h2 className="text-xs font-bold text-foreground truncate">Trai Insights</h2>
           <p className="text-[10px] text-muted-foreground">AI-powered overview</p>
         </div>
       </div>
 
       {/* Insights */}
       {insights.length > 0 && (
-        <div className="px-3.5 py-2.5 space-y-1.5 border-b border-border/30">
+        <div className="px-3 py-2 space-y-1 border-b border-border/30">
           {insights.map((insight, idx) => (
-            <div key={idx} className="flex items-start gap-2 text-[12px]">
+            <div key={idx} className="flex items-start gap-2 text-[11px]">
               <div className={cn(
-                "h-1.5 w-1.5 rounded-full shrink-0 mt-1.5",
+                "h-1.5 w-1.5 rounded-full shrink-0 mt-1",
                 idx === 0 ? "bg-primary" : idx === 1 ? "bg-success" : "bg-warning"
               )} />
               <p className="text-foreground leading-snug min-w-0">{insight}</p>
@@ -91,7 +91,7 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
       )}
 
       {/* Quick Actions */}
-      <div className="p-3 space-y-1.5">
+      <div className="p-2.5 flex-1 flex flex-col justify-end">
         {previewAction ? (
           <div className="rounded-lg bg-secondary/50 p-2.5 space-y-2">
             <p className="text-[10px] text-muted-foreground">Ask Trai:</p>
@@ -114,7 +114,7 @@ export const TraiGreeting = ({ portfolio, positions, onAskTrai, onNavigateToChat
                 className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 hover:bg-secondary/60 transition-colors w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group"
               >
                 <action.icon className="h-3.5 w-3.5 text-primary shrink-0" />
-                <span className="text-xs text-foreground flex-1 truncate">{action.label}</span>
+                <span className="text-[11px] text-foreground flex-1 truncate">{action.label}</span>
                 <ArrowRight className="h-3 w-3 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
               </button>
             ))}

@@ -18,11 +18,11 @@ export const MarketCountdown = ({ onGoToFloor }: MarketCountdownProps) => {
       const day = nyTime.getDay();
       const hours = nyTime.getHours();
       const minutes = nyTime.getMinutes();
-      
+
       const isWeekday = day >= 1 && day <= 5;
       const afterOpen = hours > 9 || (hours === 9 && minutes >= 30);
       const beforeClose = hours < 16;
-      
+
       if (isWeekday && afterOpen && beforeClose) {
         setIsMarketOpen(true);
         const closeTime = new Date(nyTime);
@@ -60,18 +60,18 @@ export const MarketCountdown = ({ onGoToFloor }: MarketCountdownProps) => {
   const pad = (n: number) => n.toString().padStart(2, '0');
 
   return (
-    <div className="glass-card rounded-2xl overflow-hidden">
+    <div className="glass-card rounded-2xl overflow-hidden h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-3.5">
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-center justify-between p-3">
+        <div className="flex items-center gap-2 min-w-0">
           <div className={cn(
             "p-1.5 rounded-lg shrink-0",
             isMarketOpen ? "bg-success/20" : "bg-warning/20"
           )}>
-            <Clock className={cn("h-4 w-4", isMarketOpen ? "text-success" : "text-warning")} />
+            <Clock className={cn("h-3.5 w-3.5", isMarketOpen ? "text-success" : "text-warning")} />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">
+            <p className="text-xs font-semibold text-foreground truncate">
               {isMarketOpen ? 'Market Open' : 'Market Closed'}
             </p>
             <p className="text-[10px] text-muted-foreground">
@@ -88,28 +88,28 @@ export const MarketCountdown = ({ onGoToFloor }: MarketCountdownProps) => {
         </div>
       </div>
 
-      {/* Timer — fixed widths, no overflow possible */}
-      <div className="px-3.5 pb-3">
-        <div className="flex items-center justify-center gap-1">
+      {/* Timer */}
+      <div className="px-3 pb-2.5 flex-1 flex items-center justify-center">
+        <div className="flex items-center gap-1">
           {[
-            { value: countdown.hours, label: 'HRS' },
-            { value: countdown.minutes, label: 'MIN' },
-            { value: countdown.seconds, label: 'SEC' },
+            { value: countdown.hours, label: 'H' },
+            { value: countdown.minutes, label: 'M' },
+            { value: countdown.seconds, label: 'S' },
           ].map((item, idx) => (
             <div key={item.label} className="flex items-center gap-1">
-              <div className="bg-secondary/80 rounded-lg w-[46px] py-1.5 text-center">
-                <p className="font-mono text-lg font-bold text-foreground leading-none">{pad(item.value)}</p>
-                <p className="text-[8px] text-muted-foreground font-medium mt-0.5 uppercase">{item.label}</p>
+              <div className="bg-secondary/80 rounded-lg w-10 py-1.5 text-center">
+                <p className="font-mono text-base font-bold text-foreground leading-none">{pad(item.value)}</p>
+                <p className="text-[7px] text-muted-foreground font-medium mt-0.5 uppercase">{item.label}</p>
               </div>
-              {idx < 2 && <span className="text-base font-bold text-muted-foreground/40">:</span>}
+              {idx < 2 && <span className="text-sm font-bold text-muted-foreground/40">:</span>}
             </div>
           ))}
         </div>
       </div>
 
       {/* CTA */}
-      <div className="px-3.5 pb-3.5">
-        <Button 
+      <div className="px-3 pb-3 mt-auto">
+        <Button
           onClick={onGoToFloor}
           size="sm"
           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-medium h-8 rounded-lg"

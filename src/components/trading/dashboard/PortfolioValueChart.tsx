@@ -98,25 +98,26 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
   }, [chartData]);
 
   return (
-    <div className="glass-card rounded-2xl overflow-hidden">
-      <div className="p-4 flex items-start justify-between gap-3">
+    <div className="glass-card rounded-2xl overflow-hidden h-full flex flex-col">
+      {/* Header */}
+      <div className="p-3 sm:p-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] text-muted-foreground mb-0.5">Portfolio Value</p>
-          <p className="text-2xl font-bold font-mono text-foreground truncate">
+          <p className="text-[10px] text-muted-foreground mb-0.5">Portfolio Value</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-foreground truncate">
             ${portfolio.equity.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
         </div>
         <div className={cn(
-          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0",
+          "flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold shrink-0",
           isPositive ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"
         )}>
-          {isPositive ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+          {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
           {isPositive ? '+' : ''}{periodChange.percent.toFixed(2)}%
         </div>
       </div>
 
       {/* Period selector */}
-      <div className="px-4 pb-3 flex gap-1" role="tablist" aria-label="Chart period">
+      <div className="px-3 sm:px-4 pb-2 flex gap-1" role="tablist" aria-label="Chart period">
         {PERIODS.map(p => (
           <button
             key={p.key}
@@ -124,7 +125,7 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
             aria-selected={selectedPeriod === p.key}
             onClick={() => setSelectedPeriod(p.key)}
             className={cn(
-              "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "px-2 py-1 rounded-md text-[10px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               selectedPeriod === p.key
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-secondary"
@@ -135,8 +136,8 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
         ))}
       </div>
 
-      {/* Chart */}
-      <div className="h-44 lg:h-52 px-2">
+      {/* Chart — flex-1 fills remaining space */}
+      <div className="flex-1 min-h-[140px] max-h-[220px] px-1">
         {isLoading ? (
           <div className="h-full flex items-center justify-center">
             <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -147,7 +148,7 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="portfolioGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={isPositive ? "hsl(142, 70%, 50%)" : "hsl(0, 85%, 60%)"} stopOpacity={0.3} />
@@ -160,7 +161,7 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
                 tickLine={false}
                 tick={{ fill: 'hsl(215, 20%, 55%)', fontSize: 9 }}
                 interval="preserveStartEnd"
-                minTickGap={50}
+                minTickGap={40}
               />
               <YAxis
                 domain={yDomain}
@@ -168,7 +169,7 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
                 tickLine={false}
                 tick={{ fill: 'hsl(215, 20%, 45%)', fontSize: 9 }}
                 tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`}
-                width={44}
+                width={40}
               />
               <Tooltip
                 content={({ active, payload }) => {
@@ -198,7 +199,7 @@ export const PortfolioValueChart = ({ portfolio }: PortfolioValueChartProps) => 
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-3 p-4 border-t border-border/30">
+      <div className="grid grid-cols-3 gap-2 p-3 border-t border-border/30">
         <div className="text-center min-w-0">
           <p className="text-[10px] text-muted-foreground mb-0.5">Period P&L</p>
           <p className={cn(
