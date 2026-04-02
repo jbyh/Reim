@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      options_chain_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          data: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           alpaca_api_key_encrypted: string | null
