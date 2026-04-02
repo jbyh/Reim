@@ -1,37 +1,47 @@
+import { useState } from 'react';
 import { GeneratedContract } from './IntuitiveOptionsChart';
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown, Calendar, DollarSign, Zap, X, Activity, BarChart3, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 
 interface SelectedContractCardProps {
   contract: GeneratedContract;
   currentPrice: number;
   onClear: () => void;
-  onTrade: () => void;
+  onTrade: (params?: { qty: number; orderType: 'market' | 'limit'; limitPrice: number }) => void;
   isSubmitting?: boolean;
 }
 
-export const SelectedContractCard = ({ 
-  contract, 
-  currentPrice, 
-  onClear, 
+export const SelectedContractCard = ({
+  contract,
+  currentPrice,
+  onClear,
   onTrade,
   isSubmitting = false,
 }: SelectedContractCardProps) => {
+  const [qty, setQty] = useState(1);
+  const [orderType, setOrderType] = useState<'market' | 'limit'>('limit');
+  const [limitPrice, setLimitPrice] = useState(contract.ask > 0 ? contract.ask : contract.premium);
+
   const isCall = contract.type === 'call';
   const distance = Math.abs(contract.strike - currentPrice);
   const distancePercent = (distance / currentPrice) * 100;
   const isITM = isCall ? currentPrice > contract.strike : currentPrice < contract.strike;
-  const totalCost = contract.premium * 100;
-  
+  const totalCost = (orderType === 'limit' ? limitPrice : contract.premium) * qty * 100;
+
   const maxLoss = totalCost;
-  const breakeven = isCall 
-    ? contract.strike + contract.premium 
-    : contract.strike - contract.premium;
+  const breakeven = isCall
+    ? contract.strike + (orderType === 'limit' ? limitPrice : contract.premium)
+    : contract.strike - (orderType === 'limit' ? limitPrice : contract.premium);
 
   const hasGreeks = contract.greeks && (contract.greeks.delta !== 0 || contract.greeks.gamma !== 0);
   const hasIV = contract.impliedVolatility && contract.impliedVolatility > 0;
+
+  const handleSubmit = () => {
+    onTrade({ qty, orderType, limitPrice });
+  };
 
   return (
     <div className={cn(
@@ -74,7 +84,7 @@ export const SelectedContractCard = ({
             <p className="text-xs text-muted-foreground">{contract.expiry}</p>
           </div>
         </div>
-        <button 
+        <button
           onClick={onClear}
           className="p-2 hover:bg-secondary/60 rounded-lg transition-colors"
         >
@@ -83,7 +93,7 @@ export const SelectedContractCard = ({
       </div>
 
       {/* Details */}
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-3">
         {/* Price Info */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-secondary/40 rounded-xl p-3">
@@ -107,7 +117,7 @@ export const SelectedContractCard = ({
           </div>
         </div>
 
-        {/* Greeks (when available) */}
+        {/* Greeks */}
         {hasGreeks && (
           <div className="grid grid-cols-4 gap-2">
             {[
@@ -127,18 +137,15 @@ export const SelectedContractCard = ({
         )}
 
         {/* Analysis */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Distance from current</span>
-            <span className={cn(
-              "font-mono font-medium",
-              isITM ? "text-success" : "text-warning"
-            )}>
+            <span className="text-muted-foreground">Distance</span>
+            <span className={cn("font-mono font-medium", isITM ? "text-success" : "text-warning")}>
               {distancePercent.toFixed(1)}% {isITM ? 'ITM' : 'OTM'}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Breakeven price</span>
+            <span className="text-muted-foreground">Breakeven</span>
             <span className="font-mono font-medium text-foreground">${breakeven.toFixed(2)}</span>
           </div>
           {hasIV && (
@@ -161,38 +168,107 @@ export const SelectedContractCard = ({
               </span>
             </div>
           )}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Max loss</span>
-            <span className="font-mono font-medium text-destructive">-${maxLoss.toFixed(0)}</span>
+        </div>
+
+        {/* Trade Controls */}
+        <div className="border-t border-border/40 pt-3 space-y-3">
+          {/* Quantity */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Quantity</span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setQty(Math.max(1, qty - 1))}
+                className="w-7 h-7 flex items-center justify-center rounded-md bg-secondary/60 hover:bg-secondary text-foreground text-sm font-bold"
+              >
+                −
+              </button>
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={qty}
+                onChange={(e) => setQty(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                className="w-14 h-7 text-center font-mono text-sm p-0 bg-secondary/40 border-border/40"
+              />
+              <button
+                onClick={() => setQty(Math.min(100, qty + 1))}
+                className="w-7 h-7 flex items-center justify-center rounded-md bg-secondary/60 hover:bg-secondary text-foreground text-sm font-bold"
+              >
+                +
+              </button>
+            </div>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Max profit</span>
-            <span className="font-mono font-medium text-success">Unlimited</span>
+
+          {/* Order Type */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Order Type</span>
+            <div className="flex bg-secondary/60 rounded-md p-0.5">
+              <button
+                onClick={() => setOrderType('limit')}
+                className={cn(
+                  "px-3 py-1 rounded text-xs font-medium transition-all",
+                  orderType === 'limit'
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Limit
+              </button>
+              <button
+                onClick={() => setOrderType('market')}
+                className={cn(
+                  "px-3 py-1 rounded text-xs font-medium transition-all",
+                  orderType === 'market'
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Market
+              </button>
+            </div>
           </div>
+
+          {/* Limit Price */}
+          {orderType === 'limit' && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Limit Price</span>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground">$</span>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0.01}
+                  value={limitPrice.toFixed(2)}
+                  onChange={(e) => setLimitPrice(Math.max(0.01, parseFloat(e.target.value) || 0.01))}
+                  className="w-20 h-7 text-right font-mono text-sm p-1 bg-secondary/40 border-border/40"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Total Cost */}
         <div className={cn(
-          "rounded-xl p-4 text-center",
+          "rounded-xl p-3 text-center",
           isCall ? "bg-success/10 border border-success/20" : "bg-destructive/10 border border-destructive/20"
         )}>
-          <p className="text-xs text-muted-foreground mb-1">Total Cost (1 contract)</p>
+          <p className="text-xs text-muted-foreground mb-1">Total Cost ({qty} contract{qty > 1 ? 's' : ''})</p>
           <p className="font-mono text-2xl font-bold text-foreground">
             ${totalCost.toFixed(0)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            {contract.premium.toFixed(2)} × 100 shares
+            Max loss: ${maxLoss.toFixed(0)} · Max profit: Unlimited
           </p>
         </div>
 
         {/* Trade Button */}
-        <Button 
-          onClick={onTrade}
+        <Button
+          onClick={handleSubmit}
           disabled={isSubmitting || !contract.realSymbol}
           className={cn(
             "w-full h-12 font-semibold text-base",
-            isCall 
-              ? "bg-success hover:bg-success/90 text-success-foreground" 
+            isCall
+              ? "bg-success hover:bg-success/90 text-success-foreground"
               : "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
           )}
         >
@@ -201,7 +277,7 @@ export const SelectedContractCard = ({
           ) : (
             <Zap className="h-4 w-4 mr-2" />
           )}
-          {!contract.realSymbol ? 'No Live Data' : isSubmitting ? 'Submitting...' : `Buy ${contract.type.toUpperCase()} Option`}
+          {!contract.realSymbol ? 'No Live Data' : isSubmitting ? 'Submitting...' : `Buy ${qty} ${contract.type.toUpperCase()} ${orderType === 'limit' ? '(Limit)' : '(Market)'}`}
         </Button>
         {!contract.realSymbol && (
           <p className="text-[10px] text-muted-foreground text-center">

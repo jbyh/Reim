@@ -14,6 +14,8 @@ const ALPACA_CRYPTO_URL = 'https://data.alpaca.markets/v1beta3/crypto/us';
 const cache: Map<string, { data: any; timestamp: number }> = new Map();
 const CACHE_TTL_MS = 30000; // 30 second cache to prevent rate limiting
 const STALE_TTL_MS = 300000; // 5 min stale cache for fallback on errors
+const DB_CACHE_FRESH_MS = 300000; // 5 min fresh from DB cache
+const DB_CACHE_STALE_MS = 900000; // 15 min stale-while-revalidate
 
 // Track last request time to enforce minimum delay between API calls
 let lastApiCallTime = 0;
@@ -69,6 +71,52 @@ const normalizeCryptoSymbol = (symbol: string): string => {
   if (symbol.includes('/')) return symbol.toUpperCase();
   return `${symbol.toUpperCase()}/USD`;
 };
+
+// --- Outlook-aware expiry date computation ---
+function computeExpiryDates(outlook: 'short' | 'long'): string[] {
+  const today = new Date();
+  const dates: string[] = [];
+  const seen = new Set<string>();
+
+  if (outlook === 'short') {
+    // Next 5 Fridays (weekly expiries)
+    let d = new Date(today);
+    while (dates.length < 5) {
+      d.setDate(d.getDate() + 1);
+      if (d.getDay() === 5) { // Friday
+        const ds = d.toISOString().split('T')[0];
+        if (!seen.has(ds)) {
+          seen.add(ds);
+          dates.push(ds);
+        }
+      }
+    }
+  } else {
+    // Long-term: quarterly — first Friday at ~3mo, 6mo, 9mo, 12mo, 18mo, 24mo
+    const monthOffsets = [3, 6, 9, 12, 18, 24];
+    for (const mo of monthOffsets) {
+      const target = new Date(today.getFullYear(), today.getMonth() + mo, 1);
+      // Find first Friday of that month
+      while (target.getDay() !== 5) {
+        target.setDate(target.getDate() + 1);
+      }
+      const ds = target.toISOString().split('T')[0];
+      if (!seen.has(ds)) {
+        seen.add(ds);
+        dates.push(ds);
+      }
+    }
+  }
+  return dates;
+}
+
+function computeStrikeRange(spotPrice: number, outlook: 'short' | 'long'): { gte: number; lte: number } {
+  const pct = outlook === 'short' ? 0.05 : 0.15;
+  return {
+    gte: Math.floor(spotPrice * (1 - pct)),
+    lte: Math.ceil(spotPrice * (1 + pct)),
+  };
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -276,16 +324,13 @@ serve(async (req) => {
         qty: String(qty),
         side: side,
         type: type || 'market',
-        // Crypto trades 24/7 so use 'gtc', stocks use 'day'
         time_in_force: isCrypto ? 'gtc' : 'day',
       };
 
-      // Add limit price for limit orders
       if (type === 'limit' && limitPrice) {
         orderPayload.limit_price = String(limitPrice);
       }
 
-      // Create order with optional bracket (stop loss / take profit) - only for stocks
       if (!isCrypto && (stopLoss || takeProfit)) {
         orderPayload.order_class = 'bracket';
         if (stopLoss) {
@@ -297,7 +342,6 @@ serve(async (req) => {
       }
 
       console.log('Submitting order to Alpaca:', orderPayload);
-      console.log('Using trading URL:', ALPACA_TRADING_URL);
 
       const response = await safeFetch(`${ALPACA_TRADING_URL}/orders`, {
         method: 'POST',
@@ -349,64 +393,75 @@ serve(async (req) => {
       });
     }
 
-    // Fetch options chain snapshots from Alpaca
+    // Fetch options chain snapshots from Alpaca — outlook-aware
     if (action === 'options_chain') {
       if (!alpacaHeaders) throw new Error('Alpaca credentials required for options data. Connect your brokerage in Settings.');
       const underlying = body.underlying_symbol;
       if (!underlying) throw new Error('underlying_symbol is required');
-      
-      const strikeLower = body.strike_price_gte ? String(body.strike_price_gte) : undefined;
-      const strikeUpper = body.strike_price_lte ? String(body.strike_price_lte) : undefined;
-      
-      cacheKey = `options_chain_v2:${underlying}:${strikeLower || ''}:${strikeUpper || ''}`;
-      const cached = getCached(cacheKey);
-      if (cached) {
-        return new Response(JSON.stringify({ data: cached, cached: true }), {
+
+      const outlook: 'short' | 'long' = body.outlook === 'long' ? 'long' : 'short';
+      const spotPrice = body.spot_price || 0;
+
+      // Compute strike range from outlook + spot price
+      let strikeLower = body.strike_price_gte ? String(body.strike_price_gte) : undefined;
+      let strikeUpper = body.strike_price_lte ? String(body.strike_price_lte) : undefined;
+
+      if (spotPrice > 0 && !strikeLower && !strikeUpper) {
+        const range = computeStrikeRange(spotPrice, outlook);
+        strikeLower = String(range.gte);
+        strikeUpper = String(range.lte);
+      }
+
+      const dbCacheKey = `${underlying}:${outlook}:${strikeLower || '0'}:${strikeUpper || '0'}`;
+
+      // 1. Check in-memory cache
+      cacheKey = `options_chain_v3:${dbCacheKey}`;
+      const memCached = getCached(cacheKey);
+      if (memCached) {
+        return new Response(JSON.stringify({ data: memCached, cached: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const allContracts: Record<string, any> = {};
-      
-      // Build target expiry dates: today, +3d, +7d, +10d, +14d, +21d, +30d, +45d
-      // We'll query each individually to get contracts across multiple expiries
-      const today = new Date();
-      const targetOffsets = [0, 3, 5, 7, 10, 14, 21, 30, 45];
-      const targetDates: string[] = [];
-      const seenDates = new Set<string>();
-      
-      for (const offset of targetOffsets) {
-        const d = new Date(today);
-        d.setDate(d.getDate() + offset);
-        // Adjust to next Friday for weekly options (except 0-day)
-        if (offset > 0) {
-          const day = d.getDay();
-          // Move to Friday (5) if not already
-          if (day !== 5) {
-            const daysToFri = (5 - day + 7) % 7 || 7;
-            d.setDate(d.getDate() + daysToFri);
+      // 2. Check DB cache (read-through)
+      try {
+        const { data: dbRow } = await supabase
+          .from('options_chain_cache')
+          .select('data, updated_at')
+          .eq('cache_key', dbCacheKey)
+          .single();
+
+        if (dbRow) {
+          const age = Date.now() - new Date(dbRow.updated_at).getTime();
+          if (age < DB_CACHE_FRESH_MS) {
+            // Fresh — return immediately
+            setCache(cacheKey, dbRow.data);
+            return new Response(JSON.stringify({ data: dbRow.data, cached: true, source: 'db' }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          } else if (age < DB_CACHE_STALE_MS) {
+            // Stale-while-revalidate — return stale, don't block
+            setCache(cacheKey, dbRow.data);
+            // We'll still fetch fresh below but return stale immediately
+            // For simplicity in edge functions (no background tasks), we fetch fresh here
+            // but if it fails, the stale data was already returned
           }
         }
-        const dateStr = d.toISOString().split('T')[0];
-        if (!seenDates.has(dateStr)) {
-          seenDates.add(dateStr);
-          targetDates.push(dateStr);
-        }
+      } catch (dbErr) {
+        console.warn('DB cache lookup failed:', dbErr);
       }
 
-      // Narrow strike range more tightly to ATM contracts (±8% of price) per expiry
-      // This ensures we get the most relevant near-the-money contracts
-      const narrowStrikeLower = strikeLower || undefined;
-      const narrowStrikeUpper = strikeUpper || undefined;
+      // 3. Fetch from Alpaca with outlook-aware dates
+      const targetDates = computeExpiryDates(outlook);
+      const allContracts: Record<string, any> = {};
 
-      // Fetch each expiry date (parallel with concurrency limit)
       const fetchExpiry = async (expiryDate: string) => {
         const url = new URL(`https://data.alpaca.markets/v1beta1/options/snapshots/${underlying}`);
         url.searchParams.set('feed', 'indicative');
         url.searchParams.set('limit', '50');
         url.searchParams.set('expiration_date', expiryDate);
-        if (narrowStrikeLower) url.searchParams.set('strike_price_gte', narrowStrikeLower);
-        if (narrowStrikeUpper) url.searchParams.set('strike_price_lte', narrowStrikeUpper);
+        if (strikeLower) url.searchParams.set('strike_price_gte', strikeLower);
+        if (strikeUpper) url.searchParams.set('strike_price_lte', strikeUpper);
 
         try {
           const response = await safeFetch(url.toString(), { headers: alpacaHeaders });
@@ -444,18 +499,33 @@ serve(async (req) => {
         }
       };
 
-      // Fetch in batches of 3 to avoid rate limiting
-      for (let i = 0; i < targetDates.length; i += 3) {
-        const batch = targetDates.slice(i, i + 3);
+      // Fetch in batches of 2 with 1s delay (rate limit friendly)
+      for (let i = 0; i < targetDates.length; i += 2) {
+        const batch = targetDates.slice(i, i + 2);
         await Promise.all(batch.map(fetchExpiry));
-        if (i + 3 < targetDates.length) {
-          await new Promise(r => setTimeout(r, 500));
+        if (i + 2 < targetDates.length) {
+          await new Promise(r => setTimeout(r, 1000));
         }
       }
-      
+
+      // 4. Store in DB cache (upsert)
+      if (Object.keys(allContracts).length > 0) {
+        try {
+          await supabase
+            .from('options_chain_cache')
+            .upsert({
+              cache_key: dbCacheKey,
+              data: allContracts,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'cache_key' });
+        } catch (dbErr) {
+          console.warn('DB cache write failed:', dbErr);
+        }
+      }
+
       setCache(cacheKey, allContracts);
-      console.log(`Options chain: ${Object.keys(allContracts).length} contracts across ${targetDates.length} expiry dates for ${underlying}`);
-      return new Response(JSON.stringify({ data: allContracts }), {
+      console.log(`Options chain (${outlook}): ${Object.keys(allContracts).length} contracts across ${targetDates.length} expiry dates for ${underlying}`);
+      return new Response(JSON.stringify({ data: allContracts, outlook, expiryDates: targetDates }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -551,7 +621,6 @@ serve(async (req) => {
         });
       }
 
-      // Alpaca News API is available even on free tier
       const newsUrl = new URL('https://data.alpaca.markets/v1beta1/news');
       newsUrl.searchParams.set('symbols', newsSymbol.replace('/USD', ''));
       newsUrl.searchParams.set('limit', '15');
@@ -587,7 +656,6 @@ serve(async (req) => {
         console.error('News fetch error:', e);
       }
 
-      // Fallback: empty array
       return new Response(JSON.stringify({ data: [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -621,7 +689,6 @@ serve(async (req) => {
     // Fetch stock bars
     if (action === 'bars' && symbol) {
       if (!alpacaHeaders) throw new Error('Alpaca credentials required for chart data');
-      // Reject OCC options symbols (e.g. SPY260417C00662000) — they aren't valid stock symbols
       if (/^[A-Z]+\d{6}[CP]\d+$/.test(symbol)) {
         return new Response(JSON.stringify({ data: { bars: [] }, error: 'Options symbols cannot be used for stock bars' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -653,19 +720,15 @@ serve(async (req) => {
       throw new Error('Symbols array is required for quotes');
     }
 
-    // Check cache first
     cacheKey = `quotes:${symbols.sort().join(',')}`;
     const cachedData = getCached(cacheKey);
     if (cachedData) {
-      console.log('Returning cached market data for:', symbols);
       return new Response(JSON.stringify({ data: cachedData, cached: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // If no Alpaca credentials, use Yahoo Finance fallback for quotes
     if (!alpacaHeaders) {
-      console.log('No Alpaca credentials, using Yahoo Finance fallback for:', symbols);
       const yahooData = await fetchYahooQuotes(symbols);
       if (Object.keys(yahooData).length > 0) {
         setCache(cacheKey, yahooData);
@@ -675,7 +738,7 @@ serve(async (req) => {
       });
     }
 
-    // Rate limit protection - wait if needed to prevent 429 errors
+    // Rate limit protection
     const now = Date.now();
     const timeSinceLastCall = now - lastApiCallTime;
     if (timeSinceLastCall < MIN_API_DELAY_MS) {
@@ -683,16 +746,13 @@ serve(async (req) => {
     }
     lastApiCallTime = Date.now();
 
-    // Separate stocks and crypto
     const stockSymbols = symbols.filter(s => !isCryptoSymbol(s));
     const cryptoSymbols = symbols.filter(s => isCryptoSymbol(s)).map(normalizeCryptoSymbol);
 
     const marketData: Record<string, any> = {};
 
-    // Fetch stock data (use snapshots to reduce API calls: 1 request vs 3)
     if (stockSymbols.length > 0) {
       const symbolsParam = stockSymbols.join(',');
-
       const snapshotsResponse = await safeFetch(
         `${ALPACA_DATA_URL}/stocks/snapshots?symbols=${symbolsParam}&feed=iex`,
         { headers: alpacaHeaders }
@@ -706,7 +766,6 @@ serve(async (req) => {
 
       const snapshotsData = await snapshotsResponse.json();
 
-      // Combine data for each stock symbol
       for (const sym of stockSymbols) {
         const snap = snapshotsData?.[sym] || snapshotsData?.snapshots?.[sym];
         const latestTrade = snap?.latestTrade;
@@ -734,23 +793,17 @@ serve(async (req) => {
       }
     }
 
-    // Fetch crypto data
     if (cryptoSymbols.length > 0) {
       const cryptoSymbolsParam = cryptoSymbols.join(',');
       
-      // Fetch latest crypto trades
       const cryptoTradesResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/latest/trades?symbols=${cryptoSymbolsParam}`,
         { headers: alpacaHeaders }
       );
-
-      // Fetch latest crypto quotes
       const cryptoQuotesResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/latest/quotes?symbols=${cryptoSymbolsParam}`,
         { headers: alpacaHeaders }
       );
-
-      // Fetch crypto bars for change calculation
       const cryptoBarsResponse = await safeFetch(
         `${ALPACA_CRYPTO_URL}/bars?symbols=${cryptoSymbolsParam}&timeframe=1Day&limit=2`,
         { headers: alpacaHeaders }
@@ -760,17 +813,10 @@ serve(async (req) => {
       let cryptoQuotesData: { quotes: Record<string, { bp: number; ap: number; bs: number; as: number; t: string }> } = { quotes: {} };
       let cryptoBarsData: { bars: Record<string, Array<{ c: number }>> } = { bars: {} };
 
-      if (cryptoTradesResponse.ok) {
-        cryptoTradesData = await cryptoTradesResponse.json();
-      }
-      if (cryptoQuotesResponse.ok) {
-        cryptoQuotesData = await cryptoQuotesResponse.json();
-      }
-      if (cryptoBarsResponse.ok) {
-        cryptoBarsData = await cryptoBarsResponse.json();
-      }
+      if (cryptoTradesResponse.ok) cryptoTradesData = await cryptoTradesResponse.json();
+      if (cryptoQuotesResponse.ok) cryptoQuotesData = await cryptoQuotesResponse.json();
+      if (cryptoBarsResponse.ok) cryptoBarsData = await cryptoBarsResponse.json();
 
-      // Combine data for each crypto symbol
       for (const cryptoSym of cryptoSymbols) {
         const trade = cryptoTradesData.trades?.[cryptoSym];
         const quote = cryptoQuotesData.quotes?.[cryptoSym];
@@ -781,30 +827,26 @@ serve(async (req) => {
         const change = lastPrice - prevClose;
         const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
-        // Store with the original format the user requested (could be BTC or BTC/USD)
         const originalSymbol = symbols.find(s => 
           normalizeCryptoSymbol(s) === cryptoSym
         ) || cryptoSym;
 
         marketData[originalSymbol] = {
           symbol: originalSymbol,
-          lastPrice: lastPrice,
+          lastPrice,
           bidPrice: quote?.bp || 0,
           askPrice: quote?.ap || 0,
           bidSize: quote?.bs || 0,
           askSize: quote?.as || 0,
           lastSize: trade?.s || 0,
-          change: change,
-          changePercent: changePercent,
+          change,
+          changePercent,
           timestamp: trade?.t || quote?.t || new Date().toISOString(),
           assetType: 'crypto',
         };
       }
     }
 
-    console.log('Market data fetched for:', symbols);
-    
-    // Cache the result
     setCache(cacheKey, marketData);
 
     return new Response(JSON.stringify({ data: marketData }), {
@@ -818,7 +860,6 @@ serve(async (req) => {
 
     console.error('Market data error:', msg);
 
-    // For rate limits or connection errors, return stale cached data to prevent blank screen
     if ((isRateLimited || isConnectionError) && cacheKey) {
       const stale = getStaleCached(cacheKey);
       if (stale) {
@@ -839,7 +880,6 @@ serve(async (req) => {
       }
     }
 
-    // For rate limits without cache, still return 200 with empty data to prevent blank screen
     if (isRateLimited || isConnectionError) {
       return new Response(
         JSON.stringify({

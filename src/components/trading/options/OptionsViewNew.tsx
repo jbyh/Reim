@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { IntuitiveOptionsChart, GeneratedContract } from './IntuitiveOptionsChart';
 import { SelectedContractCard } from './SelectedContractCard';
+import { OptionsChainTable } from './OptionsChainTable';
 import { OptionsSearch } from './OptionsSearch';
-import { TrendingUp, TrendingDown, Sparkles, LineChart, RefreshCw } from 'lucide-react';
+import { TrendingUp, TrendingDown, Sparkles, LineChart, RefreshCw, BarChart3, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
@@ -22,6 +23,9 @@ const STOCK_NAMES: Record<string, string> = {
   GOOGL: 'Alphabet Inc.',
 };
 
+type ViewOutlook = 'short' | 'long';
+type ViewMode = 'visual' | 'chain';
+
 export const OptionsViewNew = () => {
   const [symbol, setSymbol] = useState('SPY');
   const [currentPrice, setCurrentPrice] = useState(0);
@@ -32,6 +36,8 @@ export const OptionsViewNew = () => {
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [optionsChainCache, setOptionsChainCache] = useState<Record<string, any>>({});
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [outlook, setOutlook] = useState<ViewOutlook>('short');
+  const [viewMode, setViewMode] = useState<ViewMode>('visual');
 
   // Fetch real price bars for chart history
   const fetchBars = useCallback(async (sym: string): Promise<{ time: Date; price: number }[]> => {
@@ -45,7 +51,7 @@ export const OptionsViewNew = () => {
         const bars = data.data.bars;
         return bars.map((bar: any) => ({
           time: new Date(bar.t),
-          price: bar.c, // closing price
+          price: bar.c,
         }));
       }
     } catch (err) {
@@ -77,7 +83,6 @@ export const OptionsViewNew = () => {
     setIsLoading(false);
   }, []);
 
-  // Fetch real bars for chart history
   const loadBars = useCallback(async (sym: string) => {
     const bars = await fetchBars(sym);
     if (bars.length > 0) {
@@ -85,34 +90,30 @@ export const OptionsViewNew = () => {
     }
   }, [fetchBars]);
 
-  // Fetch options chain for a symbol
-  const fetchOptionsChain = useCallback(async (sym: string, price?: number) => {
+  // Fetch options chain with outlook parameter
+  const fetchOptionsChain = useCallback(async (sym: string, price?: number, ol?: ViewOutlook) => {
     try {
       const refPrice = price || currentPrice;
-      const body: Record<string, any> = { 
-        action: 'options_chain', 
+      const activeOutlook = ol || outlook;
+      const body: Record<string, any> = {
+        action: 'options_chain',
         underlying_symbol: sym,
+        outlook: activeOutlook,
+        spot_price: refPrice,
       };
-      // If we know the price, narrow strikes to ±15% for more relevant contracts
-      if (refPrice > 0) {
-        body.strike_price_gte = Math.floor(refPrice * 0.85);
-        body.strike_price_lte = Math.ceil(refPrice * 1.15);
-      }
 
-      const { data, error } = await supabase.functions.invoke('market-data', {
-        body
-      });
+      const { data, error } = await supabase.functions.invoke('market-data', { body });
 
       if (!error && data?.data) {
         setOptionsChainCache(data.data);
-        console.log(`Options chain loaded: ${Object.keys(data.data).length} contracts`);
+        console.log(`Options chain loaded (${activeOutlook}): ${Object.keys(data.data).length} contracts`);
         return data.data;
       }
     } catch (err) {
       console.error('Failed to fetch options chain:', err);
     }
     return null;
-  }, [currentPrice]);
+  }, [currentPrice, outlook]);
 
   // Initial load and symbol change
   useEffect(() => {
@@ -123,9 +124,9 @@ export const OptionsViewNew = () => {
   // Fetch options chain after we have a price
   useEffect(() => {
     if (currentPrice > 0) {
-      fetchOptionsChain(symbol, currentPrice);
+      fetchOptionsChain(symbol, currentPrice, outlook);
     }
-  }, [symbol, currentPrice, fetchOptionsChain]);
+  }, [symbol, currentPrice, outlook]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -152,8 +153,6 @@ export const OptionsViewNew = () => {
     let bestMatch: { symbol: string; data: any; distance: number } | null = null;
 
     for (const [occSymbol, contractData] of chainEntries) {
-      // Parse OCC symbol: e.g. SPY260220C00700000
-      // Format: SYMBOL + YYMMDD + C/P + strike*1000 (8 digits)
       const match = occSymbol.match(/^([A-Z]+)(\d{6})([CP])(\d{8})$/);
       if (!match) continue;
 
@@ -161,21 +160,17 @@ export const OptionsViewNew = () => {
       const strikeFromOCC = parseInt(match[4]) / 1000;
       const typeFromOCC = cpFlag === 'C' ? 'call' : 'put';
 
-      // Filter by type
       if (typeFromOCC !== approxContract.type) continue;
 
-      // Calculate distance metric (strike distance + time distance)
       const strikeDist = Math.abs(strikeFromOCC - approxContract.strike) / currentPrice;
-      
-      // Parse expiry date from OCC
       const year = 2000 + parseInt(dateStr.substring(0, 2));
       const month = parseInt(dateStr.substring(2, 4)) - 1;
       const day = parseInt(dateStr.substring(4, 6));
       const expiryDate = new Date(year, month, day);
       const daysToExp = Math.max(1, Math.round((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-      const timeDist = Math.abs(daysToExp - approxContract.daysToExpiry) / 45;
+      const timeDist = Math.abs(daysToExp - approxContract.daysToExpiry) / (outlook === 'short' ? 45 : 730);
 
-      const distance = strikeDist * 2 + timeDist; // Weight strike more
+      const distance = strikeDist * 2 + timeDist;
 
       if (!bestMatch || distance < bestMatch.distance) {
         bestMatch = { symbol: occSymbol, data: contractData, distance };
@@ -215,14 +210,19 @@ export const OptionsViewNew = () => {
       realPremium: midPrice,
       isLive: true,
     };
-  }, [optionsChainCache, currentPrice]);
+  }, [optionsChainCache, currentPrice, outlook]);
 
   const handleContractSelect = useCallback((contract: GeneratedContract) => {
-    const enriched = findNearestContract(contract);
-    setSelectedContract(enriched);
+    // If it already has realSymbol (from chain table), use directly
+    if (contract.realSymbol) {
+      setSelectedContract(contract);
+    } else {
+      const enriched = findNearestContract(contract);
+      setSelectedContract(enriched);
+    }
   }, [findNearestContract]);
 
-  const handleTrade = useCallback(async () => {
+  const handleTrade = useCallback(async (tradeParams?: { qty: number; orderType: 'market' | 'limit'; limitPrice: number }) => {
     if (!selectedContract) return;
 
     const occSymbol = selectedContract.realSymbol;
@@ -231,23 +231,27 @@ export const OptionsViewNew = () => {
       return;
     }
 
+    const qty = tradeParams?.qty || 1;
+    const orderType = tradeParams?.orderType || 'limit';
+    const limitPrice = tradeParams?.limitPrice || (selectedContract.ask > 0 ? selectedContract.ask : selectedContract.premium);
+
     setIsSubmittingOrder(true);
     try {
       const { data, error } = await supabase.functions.invoke('market-data', {
         body: {
           action: 'submit_options_order',
           orderSymbol: occSymbol,
-          qty: 1,
+          qty,
           side: 'buy',
-          type: 'limit',
-          limitPrice: selectedContract.ask > 0 ? selectedContract.ask : selectedContract.premium,
+          type: orderType,
+          limitPrice: orderType === 'limit' ? limitPrice : undefined,
         }
       });
 
       if (error) throw new Error(error.message || 'Order submission failed');
       if (data?.error) throw new Error(data.error);
 
-      toast.success(`Order placed: BUY 1 ${occSymbol}`, {
+      toast.success(`Order placed: BUY ${qty} ${occSymbol}`, {
         description: `Order ID: ${data?.data?.id || 'pending'} — Status: ${data?.data?.status || 'submitted'}`
       });
     } catch (err: any) {
@@ -281,8 +285,8 @@ export const OptionsViewNew = () => {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="w-full sm:w-72 md:w-80">
-            <OptionsSearch 
-              onSymbolChange={handleSymbolChange} 
+            <OptionsSearch
+              onSymbolChange={handleSymbolChange}
               currentSymbol={symbol}
             />
           </div>
@@ -292,8 +296,8 @@ export const OptionsViewNew = () => {
             <span className="text-muted-foreground/60">
               Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
-            <button 
-              onClick={() => { fetchPrice(symbol); fetchOptionsChain(symbol, currentPrice); }}
+            <button
+              onClick={() => { fetchPrice(symbol); fetchOptionsChain(symbol, currentPrice, outlook); }}
               disabled={isLoading}
               className="p-1 hover:bg-secondary rounded"
             >
@@ -330,7 +334,7 @@ export const OptionsViewNew = () => {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4 sm:gap-6">
               <div className="text-right">
                 <p className="text-2xl md:text-3xl lg:text-4xl font-bold font-mono text-foreground">
@@ -348,51 +352,160 @@ export const OptionsViewNew = () => {
           </div>
         </div>
 
-        {/* Instruction Banner */}
-        <div className="flex items-center gap-3 p-3 md:p-4 rounded-xl bg-primary/10 border border-primary/20">
-          <Sparkles className="h-5 w-5 text-primary flex-shrink-0" />
-          <p className="text-xs md:text-sm text-foreground">
-            <span className="font-semibold">Tap the chart</span> where you think the price will go.
-            Higher = calls (bullish), lower = puts (bearish). Further right = later expiry.
-          </p>
+        {/* Controls: Outlook + View Mode */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Outlook toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium">Outlook:</span>
+            <div className="flex bg-secondary/60 rounded-lg p-0.5">
+              <button
+                onClick={() => setOutlook('short')}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  outlook === 'short'
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Short-Term
+              </button>
+              <button
+                onClick={() => setOutlook('long')}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  outlook === 'long'
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Long-Term
+              </button>
+            </div>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-border/40 text-muted-foreground">
+              {outlook === 'short' ? '≤30d · ±5%' : 'Quarterly · ±15%'}
+            </Badge>
+          </div>
+
+          {/* View mode toggle */}
+          <div className="flex items-center gap-2">
+            <div className="flex bg-secondary/60 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode('visual')}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                  viewMode === 'visual'
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Visual
+              </button>
+              <button
+                onClick={() => setViewMode('chain')}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                  viewMode === 'chain'
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                Chain
+              </button>
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              {Object.keys(optionsChainCache).length} contracts
+            </span>
+          </div>
         </div>
+
+        {/* Instruction Banner (visual mode only) */}
+        {viewMode === 'visual' && (
+          <div className="flex items-center gap-3 p-3 md:p-4 rounded-xl bg-primary/10 border border-primary/20">
+            <Sparkles className="h-5 w-5 text-primary flex-shrink-0" />
+            <p className="text-xs md:text-sm text-foreground">
+              <span className="font-semibold">Tap the chart</span> where you think the price will go.
+              Higher = calls (bullish), lower = puts (bearish). Further right = later expiry.
+            </p>
+          </div>
+        )}
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-          <div className="lg:col-span-2">
-            <IntuitiveOptionsChart
-              currentPrice={currentPrice}
-              symbol={symbol}
-              priceHistory={priceHistory}
-              onContractSelect={handleContractSelect}
-              selectedContract={selectedContract}
-            />
-          </div>
-
-          <div className="lg:col-span-1">
-            {selectedContract ? (
-              <SelectedContractCard
-                contract={selectedContract}
+        {viewMode === 'visual' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="lg:col-span-2">
+              <IntuitiveOptionsChart
                 currentPrice={currentPrice}
-                onClear={() => setSelectedContract(null)}
-                onTrade={handleTrade}
-                isSubmitting={isSubmittingOrder}
+                symbol={symbol}
+                priceHistory={priceHistory}
+                onContractSelect={handleContractSelect}
+                selectedContract={selectedContract}
+                outlook={outlook}
+                optionsChainCache={optionsChainCache}
               />
-            ) : (
-              <div className="glass-card rounded-2xl p-6 md:p-8 text-center h-full min-h-[300px] flex flex-col items-center justify-center">
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto mb-4">
-                  <LineChart className="h-7 w-7 md:h-8 md:w-8 text-primary" />
+            </div>
+
+            <div className="lg:col-span-1">
+              {selectedContract ? (
+                <SelectedContractCard
+                  contract={selectedContract}
+                  currentPrice={currentPrice}
+                  onClear={() => setSelectedContract(null)}
+                  onTrade={handleTrade}
+                  isSubmitting={isSubmittingOrder}
+                />
+              ) : (
+                <div className="glass-card rounded-2xl p-6 md:p-8 text-center h-full min-h-[300px] flex flex-col items-center justify-center">
+                  <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto mb-4">
+                    <LineChart className="h-7 w-7 md:h-8 md:w-8 text-primary" />
+                  </div>
+                  <p className="text-base md:text-lg font-semibold text-foreground mb-2">
+                    Tap to Select Contract
+                  </p>
+                  <p className="text-xs md:text-sm text-muted-foreground max-w-[250px]">
+                    Click anywhere on the chart to instantly configure an options contract based on your price target and timing.
+                  </p>
                 </div>
-                <p className="text-base md:text-lg font-semibold text-foreground mb-2">
-                  Tap to Select Contract
-                </p>
-                <p className="text-xs md:text-sm text-muted-foreground max-w-[250px]">
-                  Click anywhere on the chart to instantly configure an options contract based on your price target and timing.
-                </p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            <div className="lg:col-span-2">
+              <OptionsChainTable
+                optionsChainCache={optionsChainCache}
+                currentPrice={currentPrice}
+                symbol={symbol}
+                onContractSelect={handleContractSelect}
+              />
+            </div>
+
+            <div className="lg:col-span-1">
+              {selectedContract ? (
+                <SelectedContractCard
+                  contract={selectedContract}
+                  currentPrice={currentPrice}
+                  onClear={() => setSelectedContract(null)}
+                  onTrade={handleTrade}
+                  isSubmitting={isSubmittingOrder}
+                />
+              ) : (
+                <div className="glass-card rounded-2xl p-6 md:p-8 text-center h-full min-h-[300px] flex flex-col items-center justify-center">
+                  <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-primary/20 flex items-center justify-center mx-auto mb-4">
+                    <BarChart3 className="h-7 w-7 md:h-8 md:w-8 text-primary" />
+                  </div>
+                  <p className="text-base md:text-lg font-semibold text-foreground mb-2">
+                    Select a Contract
+                  </p>
+                  <p className="text-xs md:text-sm text-muted-foreground max-w-[250px]">
+                    Click any row in the options chain to view contract details and place a trade.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
