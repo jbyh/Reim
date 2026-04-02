@@ -65,6 +65,13 @@ export const PositionDetail = ({ position, activities, onBack }: PositionDetailP
           startDate = subMonths(endDate, 1);
       }
 
+      // Detect OCC options symbols (e.g. SPY260417C00662000) and skip bars fetch
+      const isOptionsSymbol = /^[A-Z]+\d{6}[CP]\d+$/.test(position.symbol);
+      if (isOptionsSymbol) {
+        setBars([]);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('market-data', {
         body: {
           action: 'bars',

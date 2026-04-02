@@ -168,7 +168,7 @@ export const useTradingState = () => {
         return;
       }
 
-      setActivities(data.data);
+      setActivities(Array.isArray(data.data) ? data.data : []);
     } catch (err) {
       console.error('Failed to fetch activities:', err);
     } finally {

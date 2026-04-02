@@ -621,6 +621,12 @@ serve(async (req) => {
     // Fetch stock bars
     if (action === 'bars' && symbol) {
       if (!alpacaHeaders) throw new Error('Alpaca credentials required for chart data');
+      // Reject OCC options symbols (e.g. SPY260417C00662000) — they aren't valid stock symbols
+      if (/^[A-Z]+\d{6}[CP]\d+$/.test(symbol)) {
+        return new Response(JSON.stringify({ data: { bars: [] }, error: 'Options symbols cannot be used for stock bars' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const url = new URL(`${ALPACA_DATA_URL}/stocks/${symbol}/bars`);
       url.searchParams.set('timeframe', timeframe || '1Day');
       url.searchParams.set('feed', 'iex');
