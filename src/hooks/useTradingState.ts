@@ -136,7 +136,8 @@ export const useTradingState = () => {
         return;
       }
 
-      const alpacaPositions = data.data.map((p: any) => ({
+      const positionsArray = Array.isArray(data.data) ? data.data : [];
+      const alpacaPositions = positionsArray.map((p: any) => ({
         symbol: p.symbol,
         qty: parseFloat(p.qty) || 0,
         avgPrice: parseFloat(p.avg_entry_price) || 0,
@@ -167,7 +168,7 @@ export const useTradingState = () => {
         return;
       }
 
-      setActivities(data.data);
+      setActivities(Array.isArray(data.data) ? data.data : []);
     } catch (err) {
       console.error('Failed to fetch activities:', err);
     } finally {
